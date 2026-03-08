@@ -4,6 +4,7 @@ const dragOverlay = document.getElementById("dragOverlay");
 const statusLog = document.getElementById("statusLog");
 const sortSelect = document.getElementById("sortSelect");
 const sizeSelect = document.getElementById("sizeSelect");
+const apiKeyStatus = document.getElementById("apiKeyStatus");
 const apiKeyBtn = document.getElementById("apiKeyBtn");
 const restartSteamBtn = document.getElementById("restartSteamBtn");
 const removeAllBtn = document.getElementById("removeAllBtn");
@@ -592,6 +593,8 @@ async function ensureApiKeyPromptOnFirstRun() {
     return;
   }
 
+  setApiKeyStatus(response.hasApiKey);
+
   if (!response.hasApiKey && !response.hasSeenPrompt) {
     await showApiKeyDialog({
       title: "SteamGridDB API Key",
@@ -600,7 +603,30 @@ async function ensureApiKeyPromptOnFirstRun() {
       allowSkip: true,
       firstRun: true
     });
+    await refreshApiKeyStatus();
   }
+}
+
+function setApiKeyStatus(hasApiKey) {
+  if (!apiKeyStatus) {
+    return;
+  }
+
+  apiKeyStatus.textContent = hasApiKey ? "SteamGridDB: Set" : "SteamGridDB: Not set (optional)";
+  apiKeyStatus.classList.toggle("is-set", Boolean(hasApiKey));
+}
+
+async function refreshApiKeyStatus() {
+  if (!window.steamDrop || typeof window.steamDrop.getApiSettings !== "function") {
+    return;
+  }
+
+  const response = await window.steamDrop.getApiSettings();
+  if (!response || !response.ok) {
+    return;
+  }
+
+  setApiKeyStatus(response.hasApiKey);
 }
 
 function createApiKeyDialog() {
@@ -662,6 +688,7 @@ function showApiKeyDialog(options = {}) {
       }
 
       log(response.hasApiKey ? "SteamGridDB API key saved." : "SteamGridDB API key cleared.");
+      setApiKeyStatus(response.hasApiKey);
       finish(true);
     };
 
@@ -854,9 +881,11 @@ if (apiKeyBtn) {
       allowSkip: true,
       firstRun: false
     });
+    await refreshApiKeyStatus();
   });
 }
 
 Promise.resolve()
   .then(() => refreshGames())
+  .then(() => refreshApiKeyStatus())
   .then(() => ensureApiKeyPromptOnFirstRun());

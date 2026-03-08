@@ -494,7 +494,25 @@ body {
   margin-top: 10px;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 10px;
+}
+
+.api-key-status {
+  margin-right: auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(200, 223, 255, 0.25);
+  background: rgba(169, 184, 214, 0.12);
+  color: #c9d7f0;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+}
+
+.api-key-status.is-set {
+  border-color: rgba(127, 242, 159, 0.42);
+  background: rgba(127, 242, 159, 0.14);
+  color: #c9f8d8;
 }
 
 button {
@@ -548,6 +566,11 @@ button.secondary {
 
   .controls {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .api-key-status {
+    margin-right: 0;
   }
 
   .grid-toolbar {
