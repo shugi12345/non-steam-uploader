@@ -195,9 +195,14 @@ function getSteamExePath() {
 }
 
 function restartSteamInBackground(steamExe) {
-  const escapedSteamExe = steamExe.replace(/"/g, '""');
-  const cmdScript = `taskkill /IM steam.exe /F >nul 2>&1 & timeout /t 1 /nobreak >nul & start "" "${escapedSteamExe}"`;
-  const child = spawn("cmd.exe", ["/d", "/s", "/c", cmdScript], {
+  const escapedSteamExe = steamExe.replace(/'/g, "''");
+  const psScript =
+    `$ErrorActionPreference='SilentlyContinue';` +
+    `Stop-Process -Name steam -Force;` +
+    `Start-Sleep -Milliseconds 900;` +
+    `Start-Process -FilePath '${escapedSteamExe}'`;
+
+  const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", psScript], {
     detached: true,
     stdio: "ignore",
     windowsHide: true
