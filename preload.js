@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld("steamDrop", {
   getApiSettings: () => ipcRenderer.invoke("app:getApiSettings"),
   saveApiKey: (apiKey) => ipcRenderer.invoke("app:saveApiKey", { apiKey }),
   dismissApiKeyPrompt: () => ipcRenderer.invoke("app:dismissApiKeyPrompt"),
+  getSteamInstallLocation: () => ipcRenderer.invoke("app:getSteamInstallLocation"),
+  pickSteamInstallLocation: () => ipcRenderer.invoke("app:pickSteamInstallLocation"),
   removeAll: () => ipcRenderer.invoke("app:removeAll"),
   pickExes: () => ipcRenderer.invoke("app:pickExes"),
   restartSteam: () => ipcRenderer.invoke("app:restartSteam"),

@@ -5,6 +5,7 @@ const statusLog = document.getElementById("statusLog");
 const sortSelect = document.getElementById("sortSelect");
 const sizeSelect = document.getElementById("sizeSelect");
 const apiKeyStatus = document.getElementById("apiKeyStatus");
+const steamLocationBtn = document.getElementById("steamLocationBtn");
 const apiKeyBtn = document.getElementById("apiKeyBtn");
 const restartSteamBtn = document.getElementById("restartSteamBtn");
 const removeAllBtn = document.getElementById("removeAllBtn");
@@ -644,6 +645,22 @@ async function refreshApiKeyStatus() {
   setApiKeyStatus(response.hasApiKey);
 }
 
+async function refreshSteamInstallLocationStatus() {
+  if (!steamLocationBtn || !window.steamDrop || typeof window.steamDrop.getSteamInstallLocation !== "function") {
+    return;
+  }
+
+  const response = await window.steamDrop.getSteamInstallLocation();
+  if (!response || !response.ok) {
+    return;
+  }
+
+  const steamPath = String(response.steamInstallPath || "").trim();
+  const label = "Steam Location";
+  steamLocationBtn.textContent = label;
+  steamLocationBtn.title = steamPath ? `Current: ${steamPath}` : "Choose Steam install location";
+}
+
 function createApiKeyDialog() {
   const dialog = document.createElement("div");
   dialog.className = "rename-dialog";
@@ -906,7 +923,30 @@ if (apiKeyBtn) {
   });
 }
 
+if (steamLocationBtn) {
+  steamLocationBtn.addEventListener("click", async () => {
+    if (!window.steamDrop || typeof window.steamDrop.pickSteamInstallLocation !== "function") {
+      log("ERROR: Steam location picker is unavailable. Restart the app and try again.");
+      return;
+    }
+
+    const response = await window.steamDrop.pickSteamInstallLocation();
+    if (!response || !response.ok) {
+      log(`ERROR: ${response?.error || "Could not set Steam install location."}`);
+      return;
+    }
+
+    if (response.canceled) {
+      return;
+    }
+
+    log(`Steam install location set to: ${response.steamInstallPath}`);
+    await refreshSteamInstallLocationStatus();
+  });
+}
+
 Promise.resolve()
   .then(() => refreshGames())
   .then(() => refreshApiKeyStatus())
+  .then(() => refreshSteamInstallLocationStatus())
   .then(() => ensureApiKeyPromptOnFirstRun());

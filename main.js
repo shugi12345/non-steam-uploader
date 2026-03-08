@@ -137,6 +137,56 @@ ipcMain.handle("app:saveApiKey", async (_, payload) => {
   }
 });
 
+ipcMain.handle("app:getSteamInstallLocation", async () => {
+  try {
+    const settings = await readAppSettings();
+    return {
+      ok: true,
+      steamInstallPath: settings.steamInstallPath || process.env.STEAM_PATH || ""
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    };
+  }
+});
+
+ipcMain.handle("app:pickSteamInstallLocation", async () => {
+  try {
+    const settings = await readAppSettings();
+    const result = await dialog.showOpenDialog({
+      title: "Select Steam install location",
+      defaultPath: settings.steamInstallPath || process.env.STEAM_PATH || undefined,
+      properties: ["openDirectory", "createDirectory"]
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { ok: true, canceled: true };
+    }
+
+    const selectedPath = path.resolve(result.filePaths[0]);
+    const steamExePath = path.join(selectedPath, "steam.exe");
+    if (!fs.existsSync(steamExePath)) {
+      return {
+        ok: false,
+        error: "Selected folder is not a Steam install location (steam.exe not found)."
+      };
+    }
+
+    settings.steamInstallPath = selectedPath;
+    await writeAppSettings(settings);
+    applySteamInstallPath(settings.steamInstallPath);
+
+    return { ok: true, canceled: false, steamInstallPath: selectedPath };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    };
+  }
+});
+
 ipcMain.handle("app:dismissApiKeyPrompt", async () => {
   try {
     const settings = await readAppSettings();
@@ -207,6 +257,15 @@ function getSteamExePath() {
   throw new Error("Steam executable not found. Set STEAM_PATH.");
 }
 
+function applySteamInstallPath(nextPath) {
+  const value = String(nextPath || "").trim();
+  if (!value) {
+    delete process.env.STEAM_PATH;
+    return;
+  }
+  process.env.STEAM_PATH = value;
+}
+
 function restartSteamInBackground(steamExe) {
   const escapedSteamExe = steamExe.replace(/"/g, '""');
   const launchViaCmd = () => {
@@ -249,7 +308,8 @@ function getSettingsPath() {
 async function readAppSettings() {
   const defaults = {
     steamGridDbApiKey: "",
-    hasSeenApiKeyPrompt: false
+    hasSeenApiKeyPrompt: false,
+    steamInstallPath: ""
   };
 
   try {
@@ -257,7 +317,8 @@ async function readAppSettings() {
     const parsed = JSON.parse(raw);
     return {
       steamGridDbApiKey: String(parsed?.steamGridDbApiKey || "").trim(),
-      hasSeenApiKeyPrompt: Boolean(parsed?.hasSeenApiKeyPrompt)
+      hasSeenApiKeyPrompt: Boolean(parsed?.hasSeenApiKeyPrompt),
+      steamInstallPath: String(parsed?.steamInstallPath || "").trim()
     };
   } catch (error) {
     if (error && error.code === "ENOENT") {
@@ -270,7 +331,8 @@ async function readAppSettings() {
 async function writeAppSettings(settings) {
   const normalized = {
     steamGridDbApiKey: String(settings?.steamGridDbApiKey || "").trim(),
-    hasSeenApiKeyPrompt: Boolean(settings?.hasSeenApiKeyPrompt)
+    hasSeenApiKeyPrompt: Boolean(settings?.hasSeenApiKeyPrompt),
+    steamInstallPath: String(settings?.steamInstallPath || "").trim()
   };
 
   await fs.promises.mkdir(path.dirname(getSettingsPath()), { recursive: true });
@@ -340,7 +402,13 @@ if (hasSingleInstanceLock) {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    try {
+      const settings = await readAppSettings();
+      applySteamInstallPath(settings.steamInstallPath);
+    } catch {
+      // Keep defaults if settings cannot be loaded yet.
+    }
     createWindow();
 
     app.on("activate", () => {

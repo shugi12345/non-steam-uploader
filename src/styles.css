@@ -28,6 +28,7 @@ body {
 }
 
 .app-shell {
+  position: relative;
   width: min(1120px, 96vw);
   margin: clamp(6px, 1.6vh, 14px) auto;
   padding: clamp(14px, 2.4vw, 24px);
@@ -38,6 +39,13 @@ body {
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.42);
   max-height: calc(100dvh - clamp(12px, 2.6vh, 28px));
   overflow: hidden;
+}
+
+.top-actions {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 20;
 }
 
 .hero h1 {
@@ -546,6 +554,11 @@ button.secondary {
   color: #0d1e3a;
 }
 
+button.compact {
+  padding: 7px 10px;
+  font-size: 0.8rem;
+}
+
 button.needs-restart {
   box-shadow:
     0 0 0 1px rgba(127, 242, 159, 0.55),
@@ -625,6 +638,13 @@ button.needs-restart {
   .grid-toolbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .top-actions {
+    position: static;
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
   }
 
   .toolbar-controls {

@@ -1,6 +1,6 @@
 {
   "name": "non-steam-uploader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Drag-and-drop app to add games to Steam with artwork fetching.",
   "main": "main.js",
   "scripts": {
