@@ -20,6 +20,7 @@ let allGamesCache = [];
 let selectedShortcutIds = new Set();
 let lastSelectedShortcutId = null;
 const GRID_SIZE_STORAGE_KEY = "steamDrop.gridSize";
+let restartRequired = false;
 
 function log(message) {
   const timestamp = new Date().toLocaleTimeString();
@@ -53,6 +54,11 @@ function setProgressState({ visible, label, done, total }) {
   progressLabel.textContent = label || "Working...";
   progressPct.textContent = `${pct}%`;
   progressFill.style.width = `${pct}%`;
+}
+
+function setRestartRequired(required) {
+  restartRequired = Boolean(required);
+  restartSteamBtn.classList.toggle("needs-restart", restartRequired);
 }
 
 async function refreshGames() {
@@ -249,6 +255,7 @@ restartSteamBtn.addEventListener("click", async () => {
   }
 
   log("Steam restarted.");
+  setRestartRequired(false);
 });
 
 removeAllBtn.addEventListener("click", async () => {
@@ -264,6 +271,9 @@ removeAllBtn.addEventListener("click", async () => {
   }
 
   log(`Removed ${response.removedCount} game(s).`);
+  if (response.removedCount > 0) {
+    setRestartRequired(true);
+  }
   await refreshGames();
 });
 
@@ -362,6 +372,8 @@ async function processExe(exePath) {
       log(note);
     }
   }
+
+  setRestartRequired(true);
 }
 
 function getDisplayName(name) {
@@ -503,6 +515,7 @@ async function removeGamesFromMenu(games) {
   }
 
   selectedShortcutIds.clear();
+  setRestartRequired(true);
   await refreshGames();
 }
 
@@ -552,6 +565,7 @@ async function renameGameFromMenu(game, displayName) {
   }
 
   setProgressState({ visible: true, label: `Renaming ${displayName}`, done: 1, total: 1 });
+  setRestartRequired(true);
   await refreshGames();
   setTimeout(() => setProgressState({ visible: false, done: 0, total: 1 }), 700);
 }
@@ -580,6 +594,7 @@ async function setVrFromMenu(games, isVr) {
   }
 
   renderSortedGames();
+  setRestartRequired(true);
   log(`${targets.length} app(s) marked as ${isVr ? "VR" : "non-VR"} in Steam.`);
 }
 

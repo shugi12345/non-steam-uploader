@@ -546,6 +546,25 @@ button.secondary {
   color: #0d1e3a;
 }
 
+button.needs-restart {
+  box-shadow:
+    0 0 0 1px rgba(127, 242, 159, 0.55),
+    0 0 14px rgba(127, 242, 159, 0.5),
+    0 0 28px rgba(84, 201, 255, 0.45);
+  animation: restartGlow 1.6s ease-in-out infinite;
+}
+
+@keyframes restartGlow {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+
+  50% {
+    filter: brightness(1.12);
+  }
+}
+
 .status-panel {
   margin-top: 10px;
   border: 1px solid rgba(200, 223, 255, 0.24);
