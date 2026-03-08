@@ -6,6 +6,12 @@ const { processInput, getGames, removeGame, renameGame, setGameVr, removeAllGame
 
 let reloadTimer = null;
 let relaunching = false;
+let mainWindowRef = null;
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+}
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -15,7 +21,7 @@ function createWindow() {
     minHeight: 520,
     title: "Non-Steam Uploader",
     backgroundColor: "#0f172a",
-    icon: path.join(__dirname, "icon.png"),
+    icon: path.join(__dirname, process.platform === "win32" ? "icon.ico" : "icon.png"),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -28,6 +34,13 @@ function createWindow() {
   mainWindow.removeMenu();
   mainWindow.loadFile(path.join(__dirname, "src", "index.html"));
   setupDevAutoReload(mainWindow);
+  mainWindowRef = mainWindow;
+
+  mainWindow.on("closed", () => {
+    if (mainWindowRef === mainWindow) {
+      mainWindowRef = null;
+    }
+  });
 }
 
 ipcMain.handle("app:process", async (_, payload) => {
@@ -317,15 +330,26 @@ function scheduleAppRelaunch() {
   }, 250);
 }
 
-app.whenReady().then(() => {
-  createWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+if (hasSingleInstanceLock) {
+  app.on("second-instance", () => {
+    if (mainWindowRef && !mainWindowRef.isDestroyed()) {
+      if (mainWindowRef.isMinimized()) {
+        mainWindowRef.restore();
+      }
+      mainWindowRef.focus();
     }
   });
-});
+
+  app.whenReady().then(() => {
+    createWindow();
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

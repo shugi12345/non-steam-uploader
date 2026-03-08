@@ -32,13 +32,20 @@
       "src/**/*",
       "lib/**/*",
       "package.json",
-      "icon.png"
+      "icon.png",
+      "icon.ico"
     ],
     "win": {
+      "icon": "icon.ico",
       "target": [
         "nsis",
         "portable"
       ]
+    },
+    "nsis": {
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "installerHeaderIcon": "icon.ico"
     }
   }
 }
