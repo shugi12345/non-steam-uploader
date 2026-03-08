@@ -230,13 +230,13 @@ body {
 }
 
 .games-grid[data-size="large"] {
-  grid-template-columns: repeat(auto-fill, minmax(clamp(142px, 18.2vw, 190px), 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(164px, 22vw, 236px), 1fr));
+  gap: 16px;
 }
 
 .games-grid[data-size="large"] .game-name {
-  font-size: 0.95rem;
-  padding: 11px;
+  font-size: 1.02rem;
+  padding: 12px;
 }
 
 .games-grid::-webkit-scrollbar {
