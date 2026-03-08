@@ -196,14 +196,27 @@ function getSteamExePath() {
 
 function restartSteamInBackground(steamExe) {
   const escapedSteamExe = steamExe.replace(/"/g, '""');
+  const launchViaCmd = () => {
+    const launcher = spawn("cmd.exe", ["/d", "/s", "/c", `start "" "${escapedSteamExe}"`], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true
+    });
+    launcher.unref();
+  };
+
   const launchSteam = () => {
     setTimeout(() => {
-      const launcher = spawn("cmd.exe", ["/d", "/s", "/c", `start "" "${escapedSteamExe}"`], {
+      const steam = spawn(steamExe, [], {
         detached: true,
         stdio: "ignore",
         windowsHide: true
       });
-      launcher.unref();
+
+      steam.once("error", () => {
+        launchViaCmd();
+      });
+      steam.unref();
     }, 900);
   };
 
