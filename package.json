@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "non-steam-uploader",
   "version": "1.0.0",
   "description": "Drag-and-drop app to add games to Steam with artwork fetching.",
@@ -17,9 +17,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "electron-builder": "^24.13.3"
-  },
-  "dependencies": {
+    "electron-builder": "^24.13.3",
     "electron": "^32.2.2"
   },
   "build": {
