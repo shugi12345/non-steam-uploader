@@ -137,7 +137,7 @@ function renderGames(games) {
 
     card.addEventListener("contextmenu", async (event) => {
       event.preventDefault();
-      showGameMenu(event.clientX, event.clientY, game, displayName);
+      showGameMenu(card, game, displayName);
     });
 
     gamesGrid.appendChild(card);
@@ -364,8 +364,8 @@ function createGameContextMenu() {
   return menu;
 }
 
-function showGameMenu(clientX, clientY, game, displayName) {
-  menuTarget = { game, displayName };
+function showGameMenu(cardElement, game, displayName) {
+  menuTarget = { game, displayName, cardElement };
   const vrToggle = gameMenu.querySelector('input[data-role="vr-toggle"]');
   if (vrToggle) {
     vrToggle.checked = Boolean(game.isVr);
@@ -373,9 +373,12 @@ function showGameMenu(clientX, clientY, game, displayName) {
 
   gameMenu.hidden = false;
 
+  const cardRect = cardElement.getBoundingClientRect();
   const rect = gameMenu.getBoundingClientRect();
-  const clampedX = Math.max(10, Math.min(clientX, window.innerWidth - rect.width - 10));
-  const clampedY = Math.max(10, Math.min(clientY, window.innerHeight - rect.height - 10));
+  const targetX = cardRect.left + 8;
+  const targetY = cardRect.top + 8;
+  const clampedX = Math.max(10, Math.min(targetX, window.innerWidth - rect.width - 10));
+  const clampedY = Math.max(10, Math.min(targetY, window.innerHeight - rect.height - 10));
   gameMenu.style.left = `${clampedX}px`;
   gameMenu.style.top = `${clampedY}px`;
 }
@@ -464,6 +467,14 @@ async function setVrFromMenu(game, displayName, isVr) {
   }
 
   game.isVr = isVr;
+  for (const item of allGamesCache) {
+    if (Number(item.shortcutId) === Number(game.shortcutId)) {
+      item.isVr = isVr;
+      break;
+    }
+  }
+
+  renderSortedGames();
   log(`${displayName} marked as ${isVr ? "VR" : "non-VR"} in Steam.`);
 }
 
