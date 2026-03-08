@@ -1,6 +1,6 @@
 ﻿# Non-Steam Uploader 🎮
 
-![Non-Steam Uploader Icon](./icon.png)
+<img src="./icon.png" alt="Non-Steam Uploader Icon" width="96" />
 
 Add non-Steam games to your Steam library with artwork, fast management tools, and a clean desktop UI.
 
