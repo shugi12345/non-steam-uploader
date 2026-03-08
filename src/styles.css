@@ -513,6 +513,11 @@ button.danger {
   color: #3d0620;
 }
 
+button.secondary {
+  background: linear-gradient(120deg, #a9b8d6, #7f95bb);
+  color: #0d1e3a;
+}
+
 .status-panel {
   margin-top: 10px;
   border: 1px solid rgba(200, 223, 255, 0.24);

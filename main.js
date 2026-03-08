@@ -31,7 +31,10 @@ function createWindow() {
 
 ipcMain.handle("app:process", async (_, payload) => {
   try {
-    return await processInput(payload);
+    const settings = await readAppSettings();
+    return await processInput(payload, {
+      apiKey: settings.steamGridDbApiKey
+    });
   } catch (error) {
     return {
       ok: false,
@@ -75,7 +78,57 @@ ipcMain.handle("app:removeAll", async () => {
 
 ipcMain.handle("app:renameGame", async (_, payload) => {
   try {
-    return await renameGame(payload);
+    const settings = await readAppSettings();
+    return await renameGame(payload, {
+      apiKey: settings.steamGridDbApiKey
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    };
+  }
+});
+
+ipcMain.handle("app:getApiSettings", async () => {
+  try {
+    const settings = await readAppSettings();
+    return {
+      ok: true,
+      apiKey: settings.steamGridDbApiKey || "",
+      hasApiKey: Boolean(settings.steamGridDbApiKey),
+      hasSeenPrompt: Boolean(settings.hasSeenApiKeyPrompt)
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    };
+  }
+});
+
+ipcMain.handle("app:saveApiKey", async (_, payload) => {
+  try {
+    const nextApiKey = String(payload?.apiKey || "").trim();
+    const settings = await readAppSettings();
+    settings.steamGridDbApiKey = nextApiKey;
+    settings.hasSeenApiKeyPrompt = true;
+    await writeAppSettings(settings);
+    return { ok: true, hasApiKey: Boolean(nextApiKey) };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    };
+  }
+});
+
+ipcMain.handle("app:dismissApiKeyPrompt", async () => {
+  try {
+    const settings = await readAppSettings();
+    settings.hasSeenApiKeyPrompt = true;
+    await writeAppSettings(settings);
+    return { ok: true };
   } catch (error) {
     return {
       ok: false,
@@ -166,6 +219,41 @@ function execFileAsync(file, args) {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getSettingsPath() {
+  return path.join(app.getPath("userData"), "settings.json");
+}
+
+async function readAppSettings() {
+  const defaults = {
+    steamGridDbApiKey: "",
+    hasSeenApiKeyPrompt: false
+  };
+
+  try {
+    const raw = await fs.promises.readFile(getSettingsPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      steamGridDbApiKey: String(parsed?.steamGridDbApiKey || "").trim(),
+      hasSeenApiKeyPrompt: Boolean(parsed?.hasSeenApiKeyPrompt)
+    };
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return defaults;
+    }
+    throw error;
+  }
+}
+
+async function writeAppSettings(settings) {
+  const normalized = {
+    steamGridDbApiKey: String(settings?.steamGridDbApiKey || "").trim(),
+    hasSeenApiKeyPrompt: Boolean(settings?.hasSeenApiKeyPrompt)
+  };
+
+  await fs.promises.mkdir(path.dirname(getSettingsPath()), { recursive: true });
+  await fs.promises.writeFile(getSettingsPath(), JSON.stringify(normalized, null, 2), "utf8");
 }
 
 function setupDevAutoReload(mainWindow) {

@@ -4,6 +4,7 @@ const dragOverlay = document.getElementById("dragOverlay");
 const statusLog = document.getElementById("statusLog");
 const sortSelect = document.getElementById("sortSelect");
 const sizeSelect = document.getElementById("sizeSelect");
+const apiKeyBtn = document.getElementById("apiKeyBtn");
 const restartSteamBtn = document.getElementById("restartSteamBtn");
 const removeAllBtn = document.getElementById("removeAllBtn");
 const progressWrap = document.getElementById("progressWrap");
@@ -12,6 +13,7 @@ const progressPct = document.getElementById("progressPct");
 const progressFill = document.getElementById("progressFill");
 const gameMenu = createGameContextMenu();
 const renameDialog = createRenameDialog();
+const apiKeyDialog = createApiKeyDialog();
 let menuTarget = null;
 let allGamesCache = [];
 let selectedShortcutIds = new Set();
@@ -580,6 +582,133 @@ async function setVrFromMenu(games, isVr) {
   log(`${targets.length} app(s) marked as ${isVr ? "VR" : "non-VR"} in Steam.`);
 }
 
+async function ensureApiKeyPromptOnFirstRun() {
+  if (!window.steamDrop || typeof window.steamDrop.getApiSettings !== "function") {
+    return;
+  }
+
+  const response = await window.steamDrop.getApiSettings();
+  if (!response || !response.ok) {
+    return;
+  }
+
+  if (!response.hasApiKey && !response.hasSeenPrompt) {
+    await showApiKeyDialog({
+      title: "SteamGridDB API Key",
+      description: "Paste your API key to enable SteamGridDB artwork fallback.",
+      initialApiKey: "",
+      allowSkip: true,
+      firstRun: true
+    });
+  }
+}
+
+function createApiKeyDialog() {
+  const dialog = document.createElement("div");
+  dialog.className = "rename-dialog";
+  dialog.hidden = true;
+  dialog.innerHTML = `
+    <div class="rename-dialog-backdrop" data-role="backdrop"></div>
+    <div class="rename-dialog-panel" role="dialog" aria-modal="true" aria-label="SteamGridDB API key">
+      <h3 data-role="title">SteamGridDB API Key</h3>
+      <p data-role="description">Paste your API key.</p>
+      <input type="password" data-role="input" placeholder="Enter API key" autocomplete="off" />
+      <div class="rename-dialog-actions">
+        <button type="button" data-role="skip">Skip</button>
+        <button type="button" data-role="save">Save</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(dialog);
+  return dialog;
+}
+
+function showApiKeyDialog(options = {}) {
+  return new Promise((resolve) => {
+    const title = apiKeyDialog.querySelector('[data-role="title"]');
+    const description = apiKeyDialog.querySelector('[data-role="description"]');
+    const input = apiKeyDialog.querySelector('[data-role="input"]');
+    const save = apiKeyDialog.querySelector('[data-role="save"]');
+    const skip = apiKeyDialog.querySelector('[data-role="skip"]');
+    const backdrop = apiKeyDialog.querySelector('[data-role="backdrop"]');
+
+    if (!title || !description || !input || !save || !skip || !backdrop) {
+      resolve(false);
+      return;
+    }
+
+    const allowSkip = options.allowSkip !== false;
+    let settled = false;
+    const finish = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      apiKeyDialog.hidden = true;
+      save.removeEventListener("click", onSave);
+      skip.removeEventListener("click", onSkip);
+      backdrop.removeEventListener("click", onBackdrop);
+      input.removeEventListener("keydown", onInputKeyDown);
+      document.removeEventListener("keydown", onEscKey);
+      resolve(value);
+    };
+
+    const onSave = async () => {
+      const response = await window.steamDrop.saveApiKey(String(input.value || "").trim());
+      if (!response || !response.ok) {
+        log(`ERROR: ${response?.error || "Could not save API key."}`);
+        return;
+      }
+
+      log(response.hasApiKey ? "SteamGridDB API key saved." : "SteamGridDB API key cleared.");
+      finish(true);
+    };
+
+    const onSkip = async () => {
+      if (options.firstRun && window.steamDrop?.dismissApiKeyPrompt) {
+        await window.steamDrop.dismissApiKeyPrompt();
+      }
+      finish(false);
+    };
+
+    const onBackdrop = () => {
+      if (allowSkip) {
+        onSkip();
+      }
+    };
+
+    const onInputKeyDown = (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        onSave();
+      }
+    };
+
+    const onEscKey = (event) => {
+      if (event.key === "Escape" && allowSkip) {
+        event.preventDefault();
+        onSkip();
+      }
+    };
+
+    title.textContent = options.title || "SteamGridDB API Key";
+    description.textContent = options.description || "Paste your API key.";
+    input.value = options.initialApiKey || "";
+    skip.hidden = !allowSkip;
+
+    apiKeyDialog.hidden = false;
+    input.focus();
+    input.select();
+
+    save.addEventListener("click", onSave);
+    skip.addEventListener("click", onSkip);
+    backdrop.addEventListener("click", onBackdrop);
+    input.addEventListener("keydown", onInputKeyDown);
+    document.addEventListener("keydown", onEscKey);
+  });
+}
+
 function createRenameDialog() {
   const dialog = document.createElement("div");
   dialog.className = "rename-dialog";
@@ -710,4 +839,24 @@ if (sizeSelect) {
   });
 }
 
-refreshGames();
+if (apiKeyBtn) {
+  apiKeyBtn.addEventListener("click", async () => {
+    const response = await window.steamDrop.getApiSettings();
+    if (!response || !response.ok) {
+      log(`ERROR: ${response?.error || "Could not load API key settings."}`);
+      return;
+    }
+
+    await showApiKeyDialog({
+      title: "SteamGridDB API Key",
+      description: "Paste your API key to enable SteamGridDB artwork fallback.",
+      initialApiKey: response.apiKey || "",
+      allowSkip: true,
+      firstRun: false
+    });
+  });
+}
+
+Promise.resolve()
+  .then(() => refreshGames())
+  .then(() => ensureApiKeyPromptOnFirstRun());
