@@ -13,8 +13,9 @@ function createWindow() {
     height: 760,
     minWidth: 680,
     minHeight: 520,
-    title: "Steam Drop",
+    title: "Non-Steam Uploader",
     backgroundColor: "#0f172a",
+    icon: path.join(__dirname, "icon.png"),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

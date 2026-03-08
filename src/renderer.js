@@ -251,7 +251,7 @@ restartSteamBtn.addEventListener("click", async () => {
 });
 
 removeAllBtn.addEventListener("click", async () => {
-  const confirmAll = window.confirm("Remove all Steam Drop shortcuts and artwork?");
+  const confirmAll = window.confirm("Remove all Non-Steam Uploader shortcuts and artwork?");
   if (!confirmAll) {
     return;
   }
