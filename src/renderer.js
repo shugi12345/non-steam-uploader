@@ -113,6 +113,7 @@ function renderGames(games) {
     const shortcutKey = Number(game.shortcutId);
     const card = document.createElement("article");
     card.className = "game-card";
+    card.dataset.shortcutId = String(shortcutKey);
     card.title = `${displayName}\nRight-click for options`;
     if (selectedShortcutIds.has(shortcutKey)) {
       card.classList.add("selected");
@@ -174,14 +175,16 @@ function renderGames(games) {
 
     card.addEventListener("contextmenu", async (event) => {
       event.preventDefault();
+      let anchorCard = card;
       if (!selectedShortcutIds.has(shortcutKey)) {
         selectedShortcutIds = new Set([shortcutKey]);
         lastSelectedShortcutId = shortcutKey;
         renderSortedGames();
+        anchorCard = gamesGrid.querySelector(`.game-card[data-shortcut-id="${shortcutKey}"]`) || card;
       }
 
       const selectedGames = games.filter((item) => selectedShortcutIds.has(Number(item.shortcutId)));
-      showGameMenu(card, selectedGames, displayName);
+      showGameMenu(anchorCard, selectedGames, displayName);
     });
 
     gamesGrid.appendChild(card);
