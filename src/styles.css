@@ -210,7 +210,7 @@ body {
 
 .games-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(120px, 15.5vw, 160px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(clamp(132px, 17vw, 178px), 1fr));
   gap: 12px;
   max-height: clamp(130px, calc(100dvh - 520px), 560px);
   overflow-y: auto;
@@ -220,13 +220,13 @@ body {
 }
 
 .games-grid[data-size="small"] {
-  grid-template-columns: repeat(auto-fill, minmax(clamp(104px, 13.5vw, 138px), 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(90px, 11.5vw, 116px), 1fr));
+  gap: 8px;
 }
 
 .games-grid[data-size="small"] .game-name {
-  font-size: 0.82rem;
-  padding: 8px;
+  font-size: 0.74rem;
+  padding: 6px;
 }
 
 .games-grid[data-size="large"] {
