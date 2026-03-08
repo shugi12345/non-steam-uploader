@@ -1,0 +1,62 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Steam Drop</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <p class="eyebrow">Steam Library Toolkit</p>
+        <h1>Your Added Games</h1>
+        <p class="subtitle">Use the drop box to add `.exe` files. Your installed list is shown separately below.</p>
+      </section>
+
+      <section id="dropZone" class="drop-zone" aria-label="Drop target">
+        <p class="drop-hint">Drop one or more EXE/LNK files here, or click to choose files.</p>
+        <div id="dragOverlay" class="drag-overlay" hidden>Drop files to add to Steam</div>
+      </section>
+
+      <section id="progressWrap" class="progress-wrap" hidden>
+        <div class="progress-meta">
+          <span id="progressLabel">Preparing...</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+      </section>
+
+      <section id="gridZone" class="grid-zone" aria-label="Game grid">
+        <div class="grid-toolbar">
+          <p class="grid-hint">Installed via Steam Drop</p>
+          <label class="sort-wrap" for="sortSelect">
+            Sort
+            <select id="sortSelect" aria-label="Sort installed apps">
+              <option value="added_desc">Recently Added</option>
+              <option value="added_asc">Oldest Added</option>
+              <option value="name_asc">Name A-Z</option>
+              <option value="name_desc">Name Z-A</option>
+              <option value="vr_first">VR First</option>
+            </select>
+          </label>
+        </div>
+        <div id="gamesGrid" class="games-grid"></div>
+      </section>
+
+      <section class="controls">
+        <button id="restartSteamBtn" type="button">Restart Steam</button>
+        <button id="removeAllBtn" type="button" class="danger">Remove All</button>
+      </section>
+
+      <section class="status-panel">
+        <h3>Status</h3>
+        <pre id="statusLog">Ready.</pre>
+      </section>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>
