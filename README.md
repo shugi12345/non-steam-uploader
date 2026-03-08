@@ -4,6 +4,10 @@
 
 Add non-Steam games to your Steam library with artwork, fast management tools, and a clean desktop UI.
 
+## Screenshot
+
+![App Screenshot](./Screenshot.png)
+
 ## Features ✨
 
 - Drag-and-drop support for `.exe` and `.lnk` files.
