@@ -1,25 +1,26 @@
-# Non-Steam Uploader
+﻿# Non-Steam Uploader 🎮
 
-Drag-and-drop desktop app that:
+![Non-Steam Uploader Icon](./icon.png)
 
-- accepts `.exe` files
-- adds Steam shortcuts automatically
-- downloads artwork from official Steam assets first
-- falls back to SteamGridDB when official assets are missing
-- shows a managed game grid with remove actions
+Add non-Steam games to your Steam library with artwork, fast management tools, and a clean desktop UI.
 
-## Requirements
+## Features ✨
 
-- Windows with Steam installed
-- Node.js 20+
-- Steam must be closed while writing `shortcuts.vdf` (recommended)
+- Drag-and-drop support for `.exe` and `.lnk` files.
+- Automatic Steam shortcut creation in the latest Steam user profile.
+- Artwork: official Steam assets first, with optional SteamGridDB fallback.
+- In-app SteamGridDB API key setup (with optional first-run prompt).
+- Right-click actions: rename, delete, and `VR Game` toggle.
+- Multi-select: `Ctrl/Cmd+Click` and `Shift+Click` range selection.
+- Sorting options (recent, oldest, A-Z, Z-A, VR first).
+- Game size presets (small / medium / large).
+- One-click Steam restart button.
+- Single-instance app lock (second launch focuses existing window).
 
-## Setup
+## Requirements 🧩
 
-```powershell
-npm install
-npm start
-```
+- Windows with Steam installed.
+- Node.js 20+.
 
 If Steam is installed in a custom location, set:
 
@@ -27,31 +28,42 @@ If Steam is installed in a custom location, set:
 $env:STEAM_PATH="D:\Apps\Steam"
 ```
 
-## Usage
+## Install & Run 🚀
 
-- Drag one or more `.exe` files into the app window.
-- Or use `Pick EXE`.
-- Right-click a game card to remove it.
-- Use `Remove All` to delete all Steam Drop shortcuts + artwork.
+```powershell
+npm install
+npm start
+```
 
-The app updates the latest Steam user profile under:
+The app auto-reloads in development after file changes.
+
+## How To Use 🕹️
+
+1. Drag and drop one or more `.exe` / `.lnk` files into the app (or click to choose files).
+2. Review games in the installed grid.
+3. Right-click card(s) to rename, delete, or set VR flag.
+4. Click `Restart Steam` after changes so Steam refreshes shortcuts/artwork.
+
+## SteamGridDB API Key (Optional) 🔑
+
+You can set or edit the key directly in the app from the `SteamGridDB API Key` button.
+
+Get your key here:
+https://www.steamgriddb.com/profile/preferences/api
+
+## Data Written By The App 🗂️
 
 - `Steam\userdata\<userId>\config\shortcuts.vdf`
 - `Steam\userdata\<userId>\config\grid\`
 
-## Notes
-
-Artwork naming follows Steam grid conventions:
+Artwork filenames follow Steam grid conventions:
 
 - `<shortcutId>.jpg` (landscape)
 - `<shortcutId>p.jpg` (portrait)
 - `<shortcutId>_hero.jpg`
 - `<shortcutId>_logo.png`
 
-SteamGridDB fallback needs a valid API key from https://www.steamgriddb.com/profile/preferences/api
-
-
-## Build For Windows
+## Build For Windows 🏗️
 
 Build installer:
 
@@ -65,5 +77,4 @@ Build portable app:
 npm run build:win-portable
 ```
 
-Build output goes to `dist\`.
-
+Output is generated in `dist\`.
