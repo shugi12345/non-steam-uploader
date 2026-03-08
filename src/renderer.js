@@ -13,6 +13,7 @@ const gameMenu = createGameContextMenu();
 const renameDialog = createRenameDialog();
 let menuTarget = null;
 let allGamesCache = [];
+let selectedShortcutIds = new Set();
 
 function log(message) {
   const timestamp = new Date().toLocaleTimeString();
@@ -56,6 +57,9 @@ async function refreshGames() {
   }
 
   allGamesCache = Array.isArray(response.games) ? response.games : [];
+  selectedShortcutIds = new Set(
+    Array.from(selectedShortcutIds).filter((id) => allGamesCache.some((game) => Number(game.shortcutId) === Number(id)))
+  );
   renderSortedGames();
 }
 
@@ -102,9 +106,13 @@ function renderGames(games) {
 
   for (const game of games) {
     const displayName = getDisplayName(game.appName);
+    const shortcutKey = Number(game.shortcutId);
     const card = document.createElement("article");
     card.className = "game-card";
     card.title = `${displayName}\nRight-click for options`;
+    if (selectedShortcutIds.has(shortcutKey)) {
+      card.classList.add("selected");
+    }
 
     if (game.isVr) {
       const vrBadge = document.createElement("span");
@@ -135,9 +143,30 @@ function renderGames(games) {
     card.appendChild(cover);
     card.appendChild(name);
 
+    card.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (event.ctrlKey || event.metaKey) {
+        if (selectedShortcutIds.has(shortcutKey)) {
+          selectedShortcutIds.delete(shortcutKey);
+        } else {
+          selectedShortcutIds.add(shortcutKey);
+        }
+      } else {
+        selectedShortcutIds = new Set([shortcutKey]);
+      }
+
+      renderSortedGames();
+    });
+
     card.addEventListener("contextmenu", async (event) => {
       event.preventDefault();
-      showGameMenu(card, game, displayName);
+      if (!selectedShortcutIds.has(shortcutKey)) {
+        selectedShortcutIds = new Set([shortcutKey]);
+        renderSortedGames();
+      }
+
+      const selectedGames = games.filter((item) => selectedShortcutIds.has(Number(item.shortcutId)));
+      showGameMenu(card, selectedGames, displayName);
     });
 
     gamesGrid.appendChild(card);
@@ -338,7 +367,7 @@ function createGameContextMenu() {
 
     const target = menuTarget;
     const nextVr = Boolean(toggle.checked);
-    await setVrFromMenu(target.game, target.displayName, nextVr);
+    await setVrFromMenu(target.games, nextVr);
   });
 
   menu.addEventListener("click", async (event) => {
@@ -351,12 +380,12 @@ function createGameContextMenu() {
     hideGameMenu();
 
     if (actionButton.dataset.action === "delete") {
-      await removeGameFromMenu(target.game, target.displayName);
+      await removeGamesFromMenu(target.games);
       return;
     }
 
-    if (actionButton.dataset.action === "rename") {
-      await renameGameFromMenu(target.game, target.displayName);
+    if (actionButton.dataset.action === "rename" && target.games.length === 1) {
+      await renameGameFromMenu(target.games[0], getDisplayName(target.games[0].appName));
     }
   });
 
@@ -364,11 +393,31 @@ function createGameContextMenu() {
   return menu;
 }
 
-function showGameMenu(cardElement, game, displayName) {
-  menuTarget = { game, displayName, cardElement };
+function showGameMenu(cardElement, games, fallbackDisplayName) {
+  const targetGames = Array.isArray(games) && games.length > 0 ? games : [];
+  if (targetGames.length === 0) {
+    return;
+  }
+
+  menuTarget = { games: targetGames, cardElement };
   const vrToggle = gameMenu.querySelector('input[data-role="vr-toggle"]');
+  const renameButton = gameMenu.querySelector('button[data-action="rename"]');
   if (vrToggle) {
-    vrToggle.checked = Boolean(game.isVr);
+    const vrStates = targetGames.map((item) => Boolean(item.isVr));
+    const allSame = vrStates.every((value) => value === vrStates[0]);
+    vrToggle.indeterminate = !allSame;
+    vrToggle.checked = allSame ? vrStates[0] : false;
+  }
+
+  if (renameButton) {
+    renameButton.disabled = targetGames.length !== 1;
+    renameButton.title = targetGames.length === 1 ? "" : "Rename is only available for one app at a time.";
+    if (targetGames.length === 1) {
+      const name = getDisplayName(targetGames[0].appName || fallbackDisplayName);
+      renameButton.textContent = `Rename "${name}"`;
+    } else {
+      renameButton.textContent = `Rename (${targetGames.length} selected)`;
+    }
   }
 
   gameMenu.hidden = false;
@@ -388,19 +437,31 @@ function hideGameMenu() {
   gameMenu.hidden = true;
 }
 
-async function removeGameFromMenu(game, displayName) {
-  const confirmed = window.confirm(`Remove "${displayName}" from Steam shortcuts?`);
+async function removeGamesFromMenu(games) {
+  const targets = Array.isArray(games) ? games : [];
+  if (targets.length === 0) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    targets.length === 1
+      ? `Remove "${getDisplayName(targets[0].appName)}" from Steam shortcuts?`
+      : `Remove ${targets.length} selected apps from Steam shortcuts?`
+  );
   if (!confirmed) {
     return;
   }
 
-  const removed = await window.steamDrop.removeGame(game.shortcutId);
-  if (!removed.ok) {
-    log(`ERROR: ${removed.error || "Could not remove game."}`);
-    return;
+  for (const game of targets) {
+    const removed = await window.steamDrop.removeGame(game.shortcutId);
+    if (!removed.ok) {
+      log(`ERROR: ${removed.error || `Could not remove ${getDisplayName(game.appName)}.`}`);
+      continue;
+    }
+    log(`Removed shortcut: ${getDisplayName(game.appName)}`);
   }
 
-  log(`Removed shortcut: ${displayName}`);
+  selectedShortcutIds.clear();
   await refreshGames();
 }
 
@@ -454,28 +515,31 @@ async function renameGameFromMenu(game, displayName) {
   setTimeout(() => setProgressState({ visible: false, done: 0, total: 1 }), 700);
 }
 
-async function setVrFromMenu(game, displayName, isVr) {
+async function setVrFromMenu(games, isVr) {
   if (!window.steamDrop || typeof window.steamDrop.setGameVr !== "function") {
     log("ERROR: VR update API is unavailable. Restart the app and try again.");
     return;
   }
 
-  const response = await window.steamDrop.setGameVr(game.shortcutId, isVr);
-  if (!response.ok) {
-    log(`ERROR: ${response.error || "Could not update VR status."}`);
-    return;
-  }
+  const targets = Array.isArray(games) ? games : [];
+  for (const game of targets) {
+    const response = await window.steamDrop.setGameVr(game.shortcutId, isVr);
+    if (!response.ok) {
+      log(`ERROR: ${response.error || `Could not update VR status for ${getDisplayName(game.appName)}.`}`);
+      continue;
+    }
 
-  game.isVr = isVr;
-  for (const item of allGamesCache) {
-    if (Number(item.shortcutId) === Number(game.shortcutId)) {
-      item.isVr = isVr;
-      break;
+    game.isVr = isVr;
+    for (const item of allGamesCache) {
+      if (Number(item.shortcutId) === Number(game.shortcutId)) {
+        item.isVr = isVr;
+        break;
+      }
     }
   }
 
   renderSortedGames();
-  log(`${displayName} marked as ${isVr ? "VR" : "non-VR"} in Steam.`);
+  log(`${targets.length} app(s) marked as ${isVr ? "VR" : "non-VR"} in Steam.`);
 }
 
 function createRenameDialog() {
@@ -569,6 +633,13 @@ function isSupportedGameFile(filePath) {
 document.addEventListener("click", (event) => {
   if (!gameMenu.hidden && !gameMenu.contains(event.target)) {
     hideGameMenu();
+  }
+});
+
+gamesGrid.addEventListener("click", (event) => {
+  if (event.target === gamesGrid && selectedShortcutIds.size > 0) {
+    selectedShortcutIds.clear();
+    renderSortedGames();
   }
 });
 

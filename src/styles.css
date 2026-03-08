@@ -204,6 +204,11 @@ body {
   transform: translateY(-2px);
 }
 
+.game-card.selected {
+  border-color: rgba(117, 240, 182, 0.95);
+  box-shadow: 0 0 0 2px rgba(117, 240, 182, 0.28);
+}
+
 .game-cover {
   width: 100%;
   aspect-ratio: 1 / 1;
@@ -313,6 +318,11 @@ body {
 
 .game-context-menu button:hover {
   background: rgba(84, 201, 255, 0.26);
+}
+
+.game-context-menu button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .game-context-menu button.danger {
