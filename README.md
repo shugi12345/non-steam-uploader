@@ -26,12 +26,6 @@ Add non-Steam games to your Steam library with artwork, fast management tools, a
 - Windows with Steam installed.
 - Node.js 20+.
 
-If Steam is installed in a custom location, set:
-
-```powershell
-$env:STEAM_PATH="D:\Apps\Steam"
-```
-
 ## Install & Run 🚀
 
 ```powershell
