@@ -638,6 +638,12 @@ function createApiKeyDialog() {
     <div class="rename-dialog-panel" role="dialog" aria-modal="true" aria-label="SteamGridDB API key">
       <h3 data-role="title">SteamGridDB API Key</h3>
       <p data-role="description">Paste your API key.</p>
+      <p class="rename-path">
+        Get your key:
+        <a href="https://www.steamgriddb.com/profile/preferences/api" target="_blank" rel="noopener noreferrer">
+          steamgriddb.com/profile/preferences/api
+        </a>
+      </p>
       <input type="password" data-role="input" placeholder="Enter API key" autocomplete="off" />
       <div class="rename-dialog-actions">
         <button type="button" data-role="skip">Skip</button>
