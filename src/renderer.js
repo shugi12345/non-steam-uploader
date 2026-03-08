@@ -14,6 +14,7 @@ const renameDialog = createRenameDialog();
 let menuTarget = null;
 let allGamesCache = [];
 let selectedShortcutIds = new Set();
+let lastSelectedShortcutId = null;
 
 function log(message) {
   const timestamp = new Date().toLocaleTimeString();
@@ -60,6 +61,9 @@ async function refreshGames() {
   selectedShortcutIds = new Set(
     Array.from(selectedShortcutIds).filter((id) => allGamesCache.some((game) => Number(game.shortcutId) === Number(id)))
   );
+  if (lastSelectedShortcutId !== null && !allGamesCache.some((game) => Number(game.shortcutId) === Number(lastSelectedShortcutId))) {
+    lastSelectedShortcutId = null;
+  }
   renderSortedGames();
 }
 
@@ -145,7 +149,16 @@ function renderGames(games) {
 
     card.addEventListener("click", (event) => {
       event.preventDefault();
-      if (event.ctrlKey || event.metaKey) {
+      if (event.shiftKey && lastSelectedShortcutId !== null) {
+        const rangeIds = getShortcutRange(games, lastSelectedShortcutId, shortcutKey);
+        if (event.ctrlKey || event.metaKey) {
+          for (const id of rangeIds) {
+            selectedShortcutIds.add(id);
+          }
+        } else {
+          selectedShortcutIds = new Set(rangeIds);
+        }
+      } else if (event.ctrlKey || event.metaKey) {
         if (selectedShortcutIds.has(shortcutKey)) {
           selectedShortcutIds.delete(shortcutKey);
         } else {
@@ -155,6 +168,7 @@ function renderGames(games) {
         selectedShortcutIds = new Set([shortcutKey]);
       }
 
+      lastSelectedShortcutId = shortcutKey;
       renderSortedGames();
     });
 
@@ -162,6 +176,7 @@ function renderGames(games) {
       event.preventDefault();
       if (!selectedShortcutIds.has(shortcutKey)) {
         selectedShortcutIds = new Set([shortcutKey]);
+        lastSelectedShortcutId = shortcutKey;
         renderSortedGames();
       }
 
@@ -345,6 +360,19 @@ function getDisplayName(name) {
   return value || "Unknown Game";
 }
 
+function getShortcutRange(games, fromShortcutId, toShortcutId) {
+  const list = Array.isArray(games) ? games : [];
+  const fromIndex = list.findIndex((item) => Number(item.shortcutId) === Number(fromShortcutId));
+  const toIndex = list.findIndex((item) => Number(item.shortcutId) === Number(toShortcutId));
+  if (fromIndex === -1 || toIndex === -1) {
+    return [Number(toShortcutId)];
+  }
+
+  const start = Math.min(fromIndex, toIndex);
+  const end = Math.max(fromIndex, toIndex);
+  return list.slice(start, end + 1).map((item) => Number(item.shortcutId));
+}
+
 function createGameContextMenu() {
   const menu = document.createElement("div");
   menu.className = "game-context-menu";
@@ -412,12 +440,7 @@ function showGameMenu(cardElement, games, fallbackDisplayName) {
   if (renameButton) {
     renameButton.disabled = targetGames.length !== 1;
     renameButton.title = targetGames.length === 1 ? "" : "Rename is only available for one app at a time.";
-    if (targetGames.length === 1) {
-      const name = getDisplayName(targetGames[0].appName || fallbackDisplayName);
-      renameButton.textContent = `Rename "${name}"`;
-    } else {
-      renameButton.textContent = `Rename (${targetGames.length} selected)`;
-    }
+    renameButton.textContent = "Rename";
   }
 
   gameMenu.hidden = false;
@@ -639,6 +662,7 @@ document.addEventListener("click", (event) => {
 gamesGrid.addEventListener("click", (event) => {
   if (event.target === gamesGrid && selectedShortcutIds.size > 0) {
     selectedShortcutIds.clear();
+    lastSelectedShortcutId = null;
     renderSortedGames();
   }
 });
