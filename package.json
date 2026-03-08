@@ -1,0 +1,46 @@
+﻿{
+  "name": "non-steam-uploader",
+  "version": "1.0.0",
+  "description": "Drag-and-drop app to add games to Steam with artwork fetching.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win nsis",
+    "build:win-portable": "electron-builder --win portable"
+  },
+  "keywords": [
+    "steam",
+    "electron",
+    "artwork",
+    "steamgriddb"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "electron": "^32.2.2"
+  },
+  "build": {
+    "appId": "com.nonsteamuploader.app",
+    "productName": "Non-Steam Uploader",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "lib/**/*",
+      "package.json",
+      "icon.png"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    }
+  }
+}
