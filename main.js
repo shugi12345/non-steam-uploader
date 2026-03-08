@@ -195,19 +195,29 @@ function getSteamExePath() {
 }
 
 function restartSteamInBackground(steamExe) {
-  const escapedSteamExe = steamExe.replace(/'/g, "''");
-  const psScript =
-    `$ErrorActionPreference='SilentlyContinue';` +
-    `Stop-Process -Name steam -Force;` +
-    `Start-Sleep -Milliseconds 900;` +
-    `Start-Process -FilePath '${escapedSteamExe}'`;
+  let launched = false;
+  const launchSteam = () => {
+    if (launched) {
+      return;
+    }
+    launched = true;
+    setTimeout(() => {
+      const steam = spawn(steamExe, [], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true
+      });
+      steam.unref();
+    }, 900);
+  };
 
-  const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", psScript], {
-    detached: true,
+  const killer = spawn("taskkill", ["/IM", "steam.exe", "/F"], {
     stdio: "ignore",
     windowsHide: true
   });
-  child.unref();
+
+  killer.on("error", launchSteam);
+  killer.on("exit", launchSteam);
 }
 
 function getSettingsPath() {
