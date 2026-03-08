@@ -10,11 +10,12 @@ let relaunching = false;
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 980,
-    height: 700,
-    minWidth: 860,
-    minHeight: 560,
+    height: 760,
+    minWidth: 680,
+    minHeight: 520,
     title: "Steam Drop",
     backgroundColor: "#0f172a",
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -22,6 +23,8 @@ function createWindow() {
     }
   });
 
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.removeMenu();
   mainWindow.loadFile(path.join(__dirname, "src", "index.html"));
   setupDevAutoReload(mainWindow);
 }
