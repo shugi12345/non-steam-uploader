@@ -166,14 +166,7 @@ ipcMain.handle("app:pickExes", async () => {
 ipcMain.handle("app:restartSteam", async () => {
   try {
     const steamExe = getSteamExePath();
-
-    await execFileAsync("taskkill", ["/IM", "steam.exe", "/F"]);
-    await delay(600);
-
-    execFile(steamExe, [], {
-      detached: true,
-      stdio: "ignore"
-    }).unref();
+    restartSteamInBackground(steamExe);
 
     return { ok: true };
   } catch (error) {
@@ -220,6 +213,23 @@ function execFileAsync(file, args) {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function restartSteamInBackground(steamExe) {
+  execFile("taskkill", ["/IM", "steam.exe", "/F"], () => {
+    // Ignore taskkill failures; Steam may already be closed.
+    delay(600)
+      .then(() => {
+        const child = execFile(steamExe, [], {
+          detached: true,
+          stdio: "ignore"
+        });
+        child.unref();
+      })
+      .catch(() => {
+        // Ignore background restart failures.
+      });
+  });
 }
 
 function getSettingsPath() {
