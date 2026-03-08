@@ -3,6 +3,7 @@ const gamesGrid = document.getElementById("gamesGrid");
 const dragOverlay = document.getElementById("dragOverlay");
 const statusLog = document.getElementById("statusLog");
 const sortSelect = document.getElementById("sortSelect");
+const sizeSelect = document.getElementById("sizeSelect");
 const restartSteamBtn = document.getElementById("restartSteamBtn");
 const removeAllBtn = document.getElementById("removeAllBtn");
 const progressWrap = document.getElementById("progressWrap");
@@ -15,6 +16,7 @@ let menuTarget = null;
 let allGamesCache = [];
 let selectedShortcutIds = new Set();
 let lastSelectedShortcutId = null;
+const GRID_SIZE_STORAGE_KEY = "steamDrop.gridSize";
 
 function log(message) {
   const timestamp = new Date().toLocaleTimeString();
@@ -68,6 +70,7 @@ async function refreshGames() {
 }
 
 function renderSortedGames() {
+  applyGridSize();
   const sortMode = sortSelect ? sortSelect.value : "added_desc";
   renderGames(sortGames(allGamesCache, sortMode));
 }
@@ -361,6 +364,15 @@ async function processExe(exePath) {
 function getDisplayName(name) {
   const value = String(name || "").trim();
   return value || "Unknown Game";
+}
+
+function applyGridSize() {
+  if (!gamesGrid) {
+    return;
+  }
+
+  const size = sizeSelect && sizeSelect.value ? sizeSelect.value : "medium";
+  gamesGrid.dataset.size = size;
 }
 
 function getShortcutRange(games, fromShortcutId, toShortcutId) {
@@ -683,6 +695,18 @@ document.addEventListener("scroll", hideGameMenu, true);
 if (sortSelect) {
   sortSelect.addEventListener("change", () => {
     renderSortedGames();
+  });
+}
+
+if (sizeSelect) {
+  const saved = localStorage.getItem(GRID_SIZE_STORAGE_KEY);
+  if (saved === "small" || saved === "medium" || saved === "large") {
+    sizeSelect.value = saved;
+  }
+
+  sizeSelect.addEventListener("change", () => {
+    localStorage.setItem(GRID_SIZE_STORAGE_KEY, sizeSelect.value);
+    applyGridSize();
   });
 }
 

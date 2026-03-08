@@ -32,16 +32,26 @@
       <section id="gridZone" class="grid-zone" aria-label="Game grid">
         <div class="grid-toolbar">
           <p class="grid-hint">Installed via Steam Drop</p>
-          <label class="sort-wrap" for="sortSelect">
-            Sort
-            <select id="sortSelect" aria-label="Sort installed apps">
-              <option value="added_desc">Recently Added</option>
-              <option value="added_asc">Oldest Added</option>
-              <option value="name_asc">Name A-Z</option>
-              <option value="name_desc">Name Z-A</option>
-              <option value="vr_first">VR First</option>
-            </select>
-          </label>
+          <div class="toolbar-controls">
+            <label class="sort-wrap" for="sizeSelect">
+              Game Size
+              <select id="sizeSelect" aria-label="Game card size">
+                <option value="medium">Medium</option>
+                <option value="small">Small</option>
+                <option value="large">Large</option>
+              </select>
+            </label>
+            <label class="sort-wrap" for="sortSelect">
+              Sort
+              <select id="sortSelect" aria-label="Sort installed apps">
+                <option value="added_desc">Recently Added</option>
+                <option value="added_asc">Oldest Added</option>
+                <option value="name_asc">Name A-Z</option>
+                <option value="name_desc">Name Z-A</option>
+                <option value="vr_first">VR First</option>
+              </select>
+            </label>
+          </div>
         </div>
         <div id="gamesGrid" class="games-grid"></div>
       </section>

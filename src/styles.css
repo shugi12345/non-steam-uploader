@@ -29,19 +29,19 @@ body {
 
 .app-shell {
   width: min(1120px, 96vw);
-  margin: clamp(10px, 2.2vh, 20px) auto;
+  margin: clamp(6px, 1.6vh, 14px) auto;
   padding: clamp(14px, 2.4vw, 24px);
   border-radius: 24px;
   border: 1px solid var(--panel-border);
   background: var(--panel);
   backdrop-filter: blur(12px);
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.42);
-  max-height: calc(100dvh - clamp(20px, 4vh, 40px));
-  overflow: auto;
+  max-height: calc(100dvh - clamp(12px, 2.6vh, 28px));
+  overflow: hidden;
 }
 
 .hero h1 {
-  margin: 8px 0 10px;
+  margin: 6px 0 8px;
   font-size: clamp(2rem, 3.4vw, 2.9rem);
   letter-spacing: 0.02em;
 }
@@ -59,16 +59,17 @@ body {
   margin-top: 0;
   color: var(--muted);
   max-width: 70ch;
+  margin-bottom: 6px;
 }
 
 .drop-zone {
-  margin-top: 18px;
+  margin-top: 10px;
   border: 1px dashed rgba(84, 201, 255, 0.6);
   border-radius: 18px;
   padding: 20px 14px;
   background: linear-gradient(180deg, rgba(84, 201, 255, 0.08), rgba(84, 201, 255, 0.02));
   position: relative;
-  min-height: 120px;
+  min-height: clamp(82px, 12vh, 120px);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -86,7 +87,7 @@ body {
 }
 
 .grid-zone {
-  margin-top: 18px;
+  margin-top: 10px;
   border: 1px solid rgba(200, 223, 255, 0.26);
   border-radius: 18px;
   padding: 14px;
@@ -108,7 +109,14 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+}
+
+.toolbar-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .grid-toolbar .grid-hint {
@@ -169,7 +177,7 @@ body {
 }
 
 .progress-wrap {
-  margin-top: 12px;
+  margin-top: 10px;
   border: 1px solid rgba(200, 223, 255, 0.2);
   border-radius: 12px;
   padding: 10px;
@@ -202,13 +210,33 @@ body {
 
 .games-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(130px, 17vw, 168px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(clamp(120px, 15.5vw, 160px), 1fr));
   gap: 12px;
-  max-height: clamp(430px, 58vh, 560px);
+  max-height: clamp(130px, calc(100dvh - 520px), 560px);
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-width: thin;
   scrollbar-color: rgba(84, 201, 255, 0.55) rgba(255, 255, 255, 0.06);
+}
+
+.games-grid[data-size="small"] {
+  grid-template-columns: repeat(auto-fill, minmax(clamp(104px, 13.5vw, 138px), 1fr));
+  gap: 10px;
+}
+
+.games-grid[data-size="small"] .game-name {
+  font-size: 0.82rem;
+  padding: 8px;
+}
+
+.games-grid[data-size="large"] {
+  grid-template-columns: repeat(auto-fill, minmax(clamp(142px, 18.2vw, 190px), 1fr));
+  gap: 14px;
+}
+
+.games-grid[data-size="large"] .game-name {
+  font-size: 0.95rem;
+  padding: 11px;
 }
 
 .games-grid::-webkit-scrollbar {
@@ -463,7 +491,7 @@ body {
 }
 
 .controls {
-  margin-top: 14px;
+  margin-top: 10px;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -486,7 +514,7 @@ button.danger {
 }
 
 .status-panel {
-  margin-top: 16px;
+  margin-top: 10px;
   border: 1px solid rgba(200, 223, 255, 0.24);
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.2);
@@ -499,8 +527,8 @@ button.danger {
 
 #statusLog {
   margin: 0;
-  min-height: 140px;
-  max-height: 220px;
+  min-height: clamp(70px, 11vh, 120px);
+  max-height: clamp(120px, 18vh, 190px);
   overflow: auto;
   font-family: "Consolas", "Cascadia Mono", monospace;
   white-space: pre-wrap;
@@ -509,8 +537,8 @@ button.danger {
 
 @media (max-width: 700px) {
   .app-shell {
-    padding: 16px;
-    margin: 10px auto;
+    padding: 12px;
+    margin: 6px auto;
   }
 
   .controls {
@@ -522,8 +550,17 @@ button.danger {
     align-items: flex-start;
   }
 
+  .toolbar-controls {
+    width: 100%;
+  }
+
+  .sort-wrap {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .games-grid {
-    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
-    max-height: 54vh;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    max-height: clamp(110px, calc(100dvh - 500px), 50vh);
   }
 }
