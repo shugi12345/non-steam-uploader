@@ -598,7 +598,7 @@ async function ensureApiKeyPromptOnFirstRun() {
   if (!response.hasApiKey && !response.hasSeenPrompt) {
     await showApiKeyDialog({
       title: "SteamGridDB API Key",
-      description: "Paste your API key to enable SteamGridDB artwork fallback.",
+      description: "Paste your API key to enable SteamGridDB artwork fallback (optional).",
       initialApiKey: "",
       allowSkip: true,
       firstRun: true
@@ -882,7 +882,7 @@ if (apiKeyBtn) {
 
     await showApiKeyDialog({
       title: "SteamGridDB API Key",
-      description: "Paste your API key to enable SteamGridDB artwork fallback.",
+      description: "Paste your API key to enable SteamGridDB artwork fallback (optional).",
       initialApiKey: response.apiKey || "",
       allowSkip: true,
       firstRun: false

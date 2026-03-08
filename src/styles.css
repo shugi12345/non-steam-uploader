@@ -445,6 +445,16 @@ body {
   font-size: 0.9rem;
 }
 
+.rename-dialog-panel a {
+  color: #89e0ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rename-dialog-panel a:hover {
+  color: #b8f0ff;
+}
+
 .rename-path-label {
   margin: 0 0 2px !important;
   color: rgba(200, 223, 255, 0.8) !important;
