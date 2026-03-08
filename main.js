@@ -1,7 +1,7 @@
 ﻿const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const { execFile } = require("child_process");
+const { spawn } = require("child_process");
 const { processInput, getGames, removeGame, renameGame, setGameVr, removeAllGames } = require("./lib/processor");
 
 let reloadTimer = null;
@@ -194,42 +194,15 @@ function getSteamExePath() {
   throw new Error("Steam executable not found. Set STEAM_PATH.");
 }
 
-function execFileAsync(file, args) {
-  return new Promise((resolve, reject) => {
-    execFile(file, args, (error) => {
-      if (error) {
-        // taskkill returns an error when Steam is not running; treat as success.
-        if (file.toLowerCase() === "taskkill") {
-          resolve();
-          return;
-        }
-        reject(error);
-        return;
-      }
-      resolve();
-    });
-  });
-}
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function restartSteamInBackground(steamExe) {
-  execFile("taskkill", ["/IM", "steam.exe", "/F"], () => {
-    // Ignore taskkill failures; Steam may already be closed.
-    delay(600)
-      .then(() => {
-        const child = execFile(steamExe, [], {
-          detached: true,
-          stdio: "ignore"
-        });
-        child.unref();
-      })
-      .catch(() => {
-        // Ignore background restart failures.
-      });
+  const escapedSteamExe = steamExe.replace(/"/g, '""');
+  const cmdScript = `taskkill /IM steam.exe /F >nul 2>&1 & timeout /t 1 /nobreak >nul & start "" "${escapedSteamExe}"`;
+  const child = spawn("cmd.exe", ["/d", "/s", "/c", cmdScript], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true
   });
+  child.unref();
 }
 
 function getSettingsPath() {
