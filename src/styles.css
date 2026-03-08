@@ -210,7 +210,7 @@ body {
 
 .games-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(132px, 17vw, 178px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(clamp(114px, 14vw, 146px), 1fr));
   gap: 12px;
   max-height: clamp(130px, calc(100dvh - 520px), 560px);
   overflow-y: auto;
