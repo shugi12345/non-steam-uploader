@@ -320,9 +320,12 @@ body {
 }
 
 .empty-card {
+  grid-column: 1 / -1;
   min-height: 172px;
+  padding: 12px;
   display: grid;
   place-items: center;
+  text-align: center;
   color: var(--muted);
 }
 
@@ -557,6 +560,11 @@ button.secondary {
 button.compact {
   padding: 7px 10px;
   font-size: 0.8rem;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 button.needs-restart {

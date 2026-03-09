@@ -9,6 +9,7 @@ const steamLocationBtn = document.getElementById("steamLocationBtn");
 const apiKeyBtn = document.getElementById("apiKeyBtn");
 const restartSteamBtn = document.getElementById("restartSteamBtn");
 const removeAllBtn = document.getElementById("removeAllBtn");
+const undoBtn = document.getElementById("undoBtn");
 const progressWrap = document.getElementById("progressWrap");
 const progressLabel = document.getElementById("progressLabel");
 const progressPct = document.getElementById("progressPct");
@@ -21,7 +22,10 @@ let allGamesCache = [];
 let selectedShortcutIds = new Set();
 let lastSelectedShortcutId = null;
 const GRID_SIZE_STORAGE_KEY = "steamDrop.gridSize";
+const MAX_UNDO_ENTRIES = 50;
 let restartRequired = false;
+let isUndoing = false;
+const undoStack = [];
 
 function log(message) {
   const timestamp = new Date().toLocaleTimeString();
@@ -38,7 +42,12 @@ function prettyGameName(name) {
     .trim()
     .split(" ")
     .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .map((word) => {
+      if (/^I{2,}$/i.test(word)) {
+        return word.toUpperCase();
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
     .join(" ");
 }
 
@@ -60,6 +69,160 @@ function setProgressState({ visible, label, done, total }) {
 function setRestartRequired(required) {
   restartRequired = Boolean(required);
   restartSteamBtn.classList.toggle("needs-restart", restartRequired);
+}
+
+function snapshotGameState(game) {
+  return {
+    shortcutId: Number(game.shortcutId),
+    appName: getDisplayName(game.appName),
+    exePath: String(game.exePath || "").trim(),
+    isVr: Boolean(game.isVr)
+  };
+}
+
+function pushUndoAction(action) {
+  if (isUndoing || !action || typeof action !== "object") {
+    return;
+  }
+
+  undoStack.push(action);
+  if (undoStack.length > MAX_UNDO_ENTRIES) {
+    undoStack.shift();
+  }
+  updateUndoButton();
+}
+
+function updateUndoButton() {
+  if (!undoBtn) {
+    return;
+  }
+
+  const hasUndo = undoStack.length > 0;
+  undoBtn.disabled = !hasUndo;
+  undoBtn.title = hasUndo ? `Undo ${undoStack[undoStack.length - 1].label || "last action"}` : "Nothing to undo";
+}
+
+async function restoreRemovedGames(games, label) {
+  const snapshots = Array.isArray(games) ? games : [];
+  if (snapshots.length === 0) {
+    return;
+  }
+
+  setProgressState({ visible: true, label: label || "Undoing removal", done: 0, total: snapshots.length });
+  let restoredCount = 0;
+
+  for (let i = 0; i < snapshots.length; i += 1) {
+    const game = snapshots[i];
+    if (!game.exePath) {
+      log(`ERROR: Could not restore "${game.appName}" (missing executable path).`);
+      setProgressState({ visible: true, label: label || "Undoing removal", done: i + 1, total: snapshots.length });
+      continue;
+    }
+
+    const added = await window.steamDrop.process({ kind: "file", value: game.exePath });
+    if (!added.ok) {
+      log(`ERROR: Could not restore "${game.appName}". ${added.error || "Unknown error"}`);
+      setProgressState({ visible: true, label: label || "Undoing removal", done: i + 1, total: snapshots.length });
+      continue;
+    }
+
+    let currentShortcutId = Number(added.result?.shortcutId);
+    const createdName = getDisplayName(added.result?.appName);
+
+    if (game.appName && game.appName !== createdName) {
+      const renamed = await window.steamDrop.renameGame(currentShortcutId, game.appName);
+      if (renamed.ok) {
+        currentShortcutId = Number(renamed.result?.shortcutId || currentShortcutId);
+      } else {
+        log(`ERROR: Restored "${createdName}", but failed to rename to "${game.appName}". ${renamed.error || ""}`.trim());
+      }
+    }
+
+    if (game.isVr) {
+      const vrUpdated = await window.steamDrop.setGameVr(currentShortcutId, true);
+      if (!vrUpdated.ok) {
+        log(`ERROR: Restored "${game.appName}", but failed to restore VR flag.`);
+      }
+    }
+
+    restoredCount += 1;
+    setProgressState({ visible: true, label: label || "Undoing removal", done: i + 1, total: snapshots.length });
+  }
+
+  if (restoredCount > 0) {
+    setRestartRequired(true);
+    log(`Undo complete: restored ${restoredCount} game(s).`);
+  }
+  await refreshGames();
+  setTimeout(() => setProgressState({ visible: false, done: 0, total: 1 }), 700);
+}
+
+async function undoLastAction() {
+  if (undoStack.length === 0 || isUndoing) {
+    return;
+  }
+
+  const action = undoStack.pop();
+  updateUndoButton();
+  isUndoing = true;
+
+  try {
+    if (action.type === "rename") {
+      const response = await window.steamDrop.renameGame(action.shortcutId, action.previousName);
+      if (!response.ok) {
+        log(`ERROR: Undo rename failed. ${response.error || "Unknown error"}`);
+        return;
+      }
+      log(`Undo: renamed "${action.currentName}" back to "${action.previousName}".`);
+      setRestartRequired(true);
+      await refreshGames();
+      return;
+    }
+
+    if (action.type === "set_vr") {
+      let updated = 0;
+      for (const change of action.changes || []) {
+        const response = await window.steamDrop.setGameVr(change.shortcutId, change.previousIsVr);
+        if (!response.ok) {
+          log(`ERROR: Undo VR change failed for "${change.appName}". ${response.error || "Unknown error"}`);
+          continue;
+        }
+        updated += 1;
+      }
+      if (updated > 0) {
+        log(`Undo: restored VR status for ${updated} game(s).`);
+        setRestartRequired(true);
+      }
+      await refreshGames();
+      return;
+    }
+
+    if (action.type === "remove_many") {
+      await restoreRemovedGames(action.games, "Undoing remove");
+      return;
+    }
+
+    if (action.type === "add_many") {
+      let removed = 0;
+      for (const game of action.games || []) {
+        const response = await window.steamDrop.removeGame(game.shortcutId);
+        if (!response.ok) {
+          log(`ERROR: Undo add failed for "${game.appName}". ${response.error || "Unknown error"}`);
+          continue;
+        }
+        removed += 1;
+      }
+      if (removed > 0) {
+        log(`Undo: removed ${removed} recently added game(s).`);
+        setRestartRequired(true);
+      }
+      await refreshGames();
+      return;
+    }
+  } finally {
+    isUndoing = false;
+    updateUndoButton();
+  }
 }
 
 async function refreshGames() {
@@ -265,6 +428,7 @@ removeAllBtn.addEventListener("click", async () => {
     return;
   }
 
+  const snapshots = allGamesCache.map(snapshotGameState);
   const response = await window.steamDrop.removeAll();
   if (!response.ok) {
     log(`ERROR: ${response.error || "Could not remove all games."}`);
@@ -273,23 +437,46 @@ removeAllBtn.addEventListener("click", async () => {
 
   log(`Removed ${response.removedCount} game(s).`);
   if (response.removedCount > 0) {
+    pushUndoAction({
+      type: "remove_many",
+      label: `remove all (${response.removedCount})`,
+      games: snapshots
+    });
     setRestartRequired(true);
   }
   await refreshGames();
 });
 
+if (undoBtn) {
+  undoBtn.addEventListener("click", async () => {
+    await undoLastAction();
+  });
+}
+
 async function processExeBatch(paths, label) {
   const uniquePaths = Array.from(new Set(paths));
   setProgressState({ visible: true, label: label || "Adding games", done: 0, total: uniquePaths.length });
+  const addedGames = [];
 
   for (let i = 0; i < uniquePaths.length; i += 1) {
     const exePath = uniquePaths[i];
-    await processExe(exePath);
+    const added = await processExe(exePath);
+    if (added) {
+      addedGames.push(added);
+    }
     setProgressState({
       visible: true,
       label: `${label || "Adding games"} (${i + 1}/${uniquePaths.length})`,
       done: i + 1,
       total: uniquePaths.length
+    });
+  }
+
+  if (addedGames.length > 0) {
+    pushUndoAction({
+      type: "add_many",
+      label: `add (${addedGames.length})`,
+      games: addedGames
     });
   }
 
@@ -359,7 +546,7 @@ async function processExe(exePath) {
   const response = await window.steamDrop.process({ kind: "file", value: exePath });
   if (!response.ok) {
     log(`ERROR: ${response.error || "Unknown error"}`);
-    return;
+    return null;
   }
 
   const result = response.result;
@@ -375,6 +562,10 @@ async function processExe(exePath) {
   }
 
   setRestartRequired(true);
+  return {
+    shortcutId: Number(result.shortcutId),
+    appName: result.appName || displayName
+  };
 }
 
 function getDisplayName(name) {
@@ -506,13 +697,23 @@ async function removeGamesFromMenu(games) {
     return;
   }
 
+  const removedSnapshots = [];
   for (const game of targets) {
     const removed = await window.steamDrop.removeGame(game.shortcutId);
     if (!removed.ok) {
       log(`ERROR: ${removed.error || `Could not remove ${getDisplayName(game.appName)}.`}`);
       continue;
     }
+    removedSnapshots.push(snapshotGameState(game));
     log(`Removed shortcut: ${getDisplayName(game.appName)}`);
+  }
+
+  if (removedSnapshots.length > 0) {
+    pushUndoAction({
+      type: "remove_many",
+      label: `remove (${removedSnapshots.length})`,
+      games: removedSnapshots
+    });
   }
 
   selectedShortcutIds.clear();
@@ -565,6 +766,14 @@ async function renameGameFromMenu(game, displayName) {
     }
   }
 
+  pushUndoAction({
+    type: "rename",
+    label: "rename",
+    shortcutId: Number(result.shortcutId || game.shortcutId),
+    previousName: result.previousAppName || displayName,
+    currentName: result.appName || trimmed
+  });
+
   setProgressState({ visible: true, label: `Renaming ${displayName}`, done: 1, total: 1 });
   setRestartRequired(true);
   await refreshGames();
@@ -578,7 +787,9 @@ async function setVrFromMenu(games, isVr) {
   }
 
   const targets = Array.isArray(games) ? games : [];
+  const changes = [];
   for (const game of targets) {
+    const previousIsVr = Boolean(game.isVr);
     const response = await window.steamDrop.setGameVr(game.shortcutId, isVr);
     if (!response.ok) {
       log(`ERROR: ${response.error || `Could not update VR status for ${getDisplayName(game.appName)}.`}`);
@@ -592,6 +803,22 @@ async function setVrFromMenu(games, isVr) {
         break;
       }
     }
+
+    if (previousIsVr !== isVr) {
+      changes.push({
+        shortcutId: Number(game.shortcutId),
+        appName: getDisplayName(game.appName),
+        previousIsVr
+      });
+    }
+  }
+
+  if (changes.length > 0) {
+    pushUndoAction({
+      type: "set_vr",
+      label: `set VR (${changes.length})`,
+      changes
+    });
   }
 
   renderSortedGames();
@@ -950,3 +1177,5 @@ Promise.resolve()
   .then(() => refreshApiKeyStatus())
   .then(() => refreshSteamInstallLocationStatus())
   .then(() => ensureApiKeyPromptOnFirstRun());
+
+updateUndoButton();
