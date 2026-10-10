@@ -14,5 +14,19 @@ contextBridge.exposeInMainWorld("steamDrop", {
   removeAll: () => ipcRenderer.invoke("app:removeAll"),
   pickExes: () => ipcRenderer.invoke("app:pickExes"),
   restartSteam: () => ipcRenderer.invoke("app:restartSteam"),
-  getPathForFile: (file) => webUtils.getPathForFile(file)
+  getPathForFile: (file) => webUtils.getPathForFile(file),
+  listArtOptions: (shortcutId) => ipcRenderer.invoke("app:listArtOptions", shortcutId),
+  setArt: (payload) => ipcRenderer.invoke("app:setArt", payload),
+  pickArtFile: () => ipcRenderer.invoke("app:pickArtFile"),
+  getCloudSettings: () => ipcRenderer.invoke("app:getCloudSettings"),
+  saveCloudSettings: (payload) => ipcRenderer.invoke("app:saveCloudSettings", payload),
+  connectCloud: (payload) => ipcRenderer.invoke("app:connectCloud", payload),
+  testCloud: (payload) => ipcRenderer.invoke("app:testCloud", payload),
+  enableSync: (shortcutId, auto = false) => ipcRenderer.invoke("app:enableSync", { shortcutId, auto }),
+  disableSync: (shortcutId) => ipcRenderer.invoke("app:disableSync", shortcutId),
+  getCloudOverview: () => ipcRenderer.invoke("app:getCloudOverview"),
+  renameDevice: (name) => ipcRenderer.invoke("app:renameDevice", name),
+  forgetDevice: (deviceId) => ipcRenderer.invoke("app:forgetDevice", deviceId),
+  addSelfToSteam: () => ipcRenderer.invoke("app:addSelfToSteam"),
+  platform: process.platform
 });
