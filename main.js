@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+﻿const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
@@ -50,6 +50,11 @@ function createWindow() {
     }
   });
 
+  // Links (e.g. the SteamGridDB key page) open in the real browser, not a bare Electron window.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(url)) shell.openExternal(url);
+    return { action: "deny" };
+  });
   mainWindow.setMenuBarVisibility(false);
   mainWindow.removeMenu();
   mainWindow.loadFile(path.join(__dirname, "src", "index.html"));
