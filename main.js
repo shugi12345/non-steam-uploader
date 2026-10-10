@@ -30,7 +30,10 @@ let mainWindowRef = null;
 const isWrapMode = process.argv.includes("--nsu-wrap");
 // Deck Game Mode (gamescope) only shows the game's own windows, so a dialog from the wrapper
 // would sit invisible and leave Steam stuck on the loading screen. There we never block on one.
-const isGameMode = process.env.XDG_CURRENT_DESKTOP === "gamescope" || Boolean(process.env.GAMESCOPE_WAYLAND_DISPLAY);
+// Electron rewrites XDG_CURRENT_DESKTOP on Linux and keeps the real one in ORIGINAL_XDG_CURRENT_DESKTOP.
+const isGameMode =
+  [process.env.ORIGINAL_XDG_CURRENT_DESKTOP, process.env.XDG_CURRENT_DESKTOP].includes("gamescope") ||
+  Boolean(process.env.GAMESCOPE_WAYLAND_DISPLAY);
 if (isWrapMode) app.disableHardwareAcceleration(); // wrapper only ever shows message boxes
 const hasSingleInstanceLock = isWrapMode ? false : app.requestSingleInstanceLock();
 if (!isWrapMode && !hasSingleInstanceLock) {
@@ -629,6 +632,32 @@ function wrapError(message) {
   if (!isGameMode) dialog.showErrorBox("Non-Steam Uploader", message);
 }
 
+// The environment Steam launched us with. The AppImage launcher prepends its own dirs to
+// LD_LIBRARY_PATH/PATH/... (Electron's bundled libvulkan/libEGL would then shadow the system
+// graphics stack and Proton hangs on the loading screen), and Electron rewrites XDG_CURRENT_DESKTOP.
+function gameEnv() {
+  const env = { ...process.env };
+  const appDir = env.APPDIR;
+  if (appDir) {
+    for (const [key, value] of Object.entries(env)) {
+      if (typeof value !== "string" || !value.includes(appDir)) continue;
+      const kept = value.split(":").filter((part) => part && !part.startsWith(appDir));
+      if (kept.length) env[key] = kept.join(":");
+      else delete env[key];
+    }
+  }
+  if (env.ORIGINAL_XDG_CURRENT_DESKTOP) env.XDG_CURRENT_DESKTOP = env.ORIGINAL_XDG_CURRENT_DESKTOP;
+  for (const key of ["APPDIR", "APPIMAGE", "ARGV0", "OWD", "ORIGINAL_XDG_CURRENT_DESKTOP", "CHROME_DESKTOP"]) delete env[key];
+  return env;
+}
+
+// Copy wrap.log to the cloud so a Deck launch can be diagnosed from the PC.
+async function uploadWrapLog(cfg) {
+  if (!cfg.remote || !cfg.deviceId) return;
+  const text = fs.readFileSync(path.join(app.getPath("userData"), "wrap.log"), "utf8");
+  await saveSync.rcloneOk(cfg, ["rcat", saveSync.remoteJoin(cfg.remote, "non-steam-saves", "_logs", `${cfg.deviceId}.log`)], text);
+}
+
 async function runWrapMode() {
   wrapLog(`start ${JSON.stringify(process.argv.slice(1))} gameMode=${isGameMode}`);
   const flagIndex = process.argv.indexOf("--nsu-wrap");
@@ -667,10 +696,13 @@ async function runWrapMode() {
   process.on("SIGTERM", () => {});
 
   wrapLog(`launching game`);
+  if (process.platform !== "win32") wrapLog(`env diff: ${JSON.stringify(Object.keys(process.env).filter((k) => process.env[k] !== gameEnv()[k]))}`);
+  uploadWrapLog(cfg).catch(() => {});
   const exitCode = await new Promise((resolve) => {
     // ponytail: waits for the launched process only; games whose launcher exits early get backed up too soon.
     const child = spawn(command[0], command.slice(1), {
       cwd: process.platform === "win32" ? state?.gameDir || path.dirname(command[0]) : undefined,
+      env: process.platform === "win32" ? process.env : gameEnv(),
       stdio: "inherit"
     });
     child.on("error", (error) => {
@@ -695,6 +727,8 @@ async function runWrapMode() {
     }
   }
 
+  wrapLog(`game exit code ${exitCode}`);
+  await uploadWrapLog(cfg).catch(() => {});
   return exitCode;
 }
 

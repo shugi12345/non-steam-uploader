@@ -75,7 +75,7 @@ How it works:
 - To open the app itself from Game Mode, use **Cloud Saves → Add This App to Steam** once (in Desktop Mode).
 - Quitting from the Steam overlay: the wrapper ignores Steam's stop signal and uploads once the game exits. If Steam force-kills it first, the leftover changes upload automatically at the start of the next launch.
 - No Decky Loader plugin is needed.
-- Game Mode can't show the app's dialogs. A save conflict there keeps the newer save (the other one is backed up), and errors only go to `~/.config/non-steam-uploader/wrap.log`.
+- Game Mode can't show the app's dialogs. A save conflict there keeps the newer save (the other one is backed up), and errors only go to `~/.config/non-steam-uploader/wrap.log`. That log is also copied to `<remote>non-steam-saves/_logs/<device-id>.log` on each launch, so it can be read from the PC.
 
 Limits:
 
