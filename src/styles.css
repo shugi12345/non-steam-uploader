@@ -344,6 +344,88 @@ body {
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
 }
 
+.sync-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #04172a;
+  background: linear-gradient(120deg, var(--accent), #b9a6ff);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+.art-dialog-panel {
+  width: min(760px, calc(100vw - 28px));
+}
+
+.art-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.art-tabs button.active {
+  background: linear-gradient(120deg, var(--accent), var(--accent-strong));
+  color: #04172a;
+}
+
+.art-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+  max-height: min(56vh, 520px);
+  overflow: auto;
+  padding: 2px;
+}
+
+.art-grid[data-kind="landscape"],
+.art-grid[data-kind="hero"],
+.art-grid[data-kind="logo"] {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.art-grid > p {
+  grid-column: 1 / -1;
+}
+
+.art-option {
+  padding: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  background: rgba(0, 0, 0, 0.35);
+  min-width: 0;
+}
+
+.art-option img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.art-option:hover {
+  border-color: rgba(84, 201, 255, 0.6);
+}
+
+.art-option.chosen {
+  border-color: var(--ok);
+}
+
+.inline-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.inline-row input {
+  flex: 1;
+}
+
 .game-context-menu {
   position: fixed;
   z-index: 1200;

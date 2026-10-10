@@ -14,5 +14,15 @@ contextBridge.exposeInMainWorld("steamDrop", {
   removeAll: () => ipcRenderer.invoke("app:removeAll"),
   pickExes: () => ipcRenderer.invoke("app:pickExes"),
   restartSteam: () => ipcRenderer.invoke("app:restartSteam"),
-  getPathForFile: (file) => webUtils.getPathForFile(file)
+  getPathForFile: (file) => webUtils.getPathForFile(file),
+  listArtOptions: (shortcutId) => ipcRenderer.invoke("app:listArtOptions", shortcutId),
+  setArt: (payload) => ipcRenderer.invoke("app:setArt", payload),
+  pickArtFile: () => ipcRenderer.invoke("app:pickArtFile"),
+  getCloudSettings: () => ipcRenderer.invoke("app:getCloudSettings"),
+  saveCloudSettings: (payload) => ipcRenderer.invoke("app:saveCloudSettings", payload),
+  pickRclone: () => ipcRenderer.invoke("app:pickRclone"),
+  connectCloud: (payload) => ipcRenderer.invoke("app:connectCloud", payload),
+  testCloud: (payload) => ipcRenderer.invoke("app:testCloud", payload),
+  enableSync: (shortcutId) => ipcRenderer.invoke("app:enableSync", { shortcutId }),
+  disableSync: (shortcutId) => ipcRenderer.invoke("app:disableSync", shortcutId)
 });

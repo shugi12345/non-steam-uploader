@@ -10,6 +10,7 @@ const apiKeyBtn = document.getElementById("apiKeyBtn");
 const restartSteamBtn = document.getElementById("restartSteamBtn");
 const removeAllBtn = document.getElementById("removeAllBtn");
 const undoBtn = document.getElementById("undoBtn");
+const cloudBtn = document.getElementById("cloudBtn");
 const progressWrap = document.getElementById("progressWrap");
 const progressLabel = document.getElementById("progressLabel");
 const progressPct = document.getElementById("progressPct");
@@ -26,6 +27,7 @@ const MAX_UNDO_ENTRIES = 50;
 let restartRequired = false;
 let isUndoing = false;
 const undoStack = [];
+let artVersion = Date.now();
 
 function log(message) {
   const timestamp = new Date().toLocaleTimeString();
@@ -302,12 +304,21 @@ function renderGames(games) {
       card.appendChild(vrBadge);
     }
 
+    if (game.syncEnabled) {
+      const syncBadge = document.createElement("span");
+      syncBadge.className = "sync-badge";
+      syncBadge.textContent = "SYNC";
+      syncBadge.title = "Save sync on";
+      card.appendChild(syncBadge);
+    }
+
     const cover = document.createElement("div");
     cover.className = "game-cover";
 
     if (game.coverPath) {
       const image = document.createElement("img");
-      image.src = `file:///${game.coverPath.replace(/\\/g, "/")}`;
+      const coverUrl = game.coverPath.replace(/\\/g, "/");
+      image.src = `file://${coverUrl.startsWith("/") ? "" : "/"}${coverUrl}?v=${artVersion}`;
       image.alt = displayName;
       image.draggable = false;
       image.addEventListener("dragstart", (event) => event.preventDefault());
@@ -534,7 +545,7 @@ function fileUriToPath(value) {
     if (/^\/[A-Za-z]:/.test(pathname)) {
       pathname = pathname.slice(1);
     }
-    return pathname.replace(/\//g, "\\");
+    return /^[A-Za-z]:/.test(pathname) ? pathname.replace(/\//g, "\\") : pathname;
   } catch {
     return null;
   }
@@ -606,6 +617,8 @@ function createGameContextMenu() {
     </label>
     <div class="menu-divider"></div>
     <button type="button" data-action="rename">Rename</button>
+    <button type="button" data-action="art">Change Art...</button>
+    <button type="button" data-action="sync">Save Sync...</button>
     <button type="button" data-action="delete" class="danger">Delete</button>
   `;
 
@@ -637,6 +650,14 @@ function createGameContextMenu() {
     if (actionButton.dataset.action === "rename" && target.games.length === 1) {
       await renameGameFromMenu(target.games[0], getDisplayName(target.games[0].appName));
     }
+
+    if (actionButton.dataset.action === "art" && target.games.length === 1) {
+      await showArtDialog(target.games[0]);
+    }
+
+    if (actionButton.dataset.action === "sync" && target.games.length === 1) {
+      await toggleSyncFromMenu(target.games[0]);
+    }
   });
 
   document.body.appendChild(menu);
@@ -658,6 +679,14 @@ function showGameMenu(cardElement, games, fallbackDisplayName) {
     vrToggle.indeterminate = !allSame;
     vrToggle.checked = allSame ? vrStates[0] : false;
   }
+
+  for (const action of ["art", "sync"]) {
+    const button = gameMenu.querySelector(`button[data-action="${action}"]`);
+    button.disabled = targetGames.length !== 1;
+    button.title = targetGames.length === 1 ? "" : "Only available for one app at a time.";
+  }
+  gameMenu.querySelector('button[data-action="sync"]').textContent =
+    targetGames.length === 1 && targetGames[0].syncEnabled ? "Turn Off Save Sync" : "Save Sync...";
 
   if (renameButton) {
     renameButton.disabled = targetGames.length !== 1;
@@ -1079,6 +1108,226 @@ function showRenameDialog(currentName, storedPath) {
     input.addEventListener("keydown", onInputKeyDown);
     document.addEventListener("keydown", onEscKey);
   });
+}
+
+// Small modal reusing the rename-dialog styles. Returns { panel, close, closed }.
+function openModal(html, extraClass = "") {
+  const root = document.createElement("div");
+  root.className = "rename-dialog";
+  root.innerHTML = `
+    <div class="rename-dialog-backdrop" data-role="backdrop"></div>
+    <div class="rename-dialog-panel ${extraClass}" role="dialog" aria-modal="true">${html}</div>
+  `;
+  document.body.appendChild(root);
+
+  let resolveClosed;
+  const closed = new Promise((resolve) => (resolveClosed = resolve));
+  const onKey = (event) => {
+    if (event.key === "Escape") close();
+  };
+  const close = () => {
+    document.removeEventListener("keydown", onKey);
+    root.remove();
+    resolveClosed();
+  };
+  root.querySelector('[data-role="backdrop"]').addEventListener("click", close);
+  document.addEventListener("keydown", onKey);
+  return { panel: root.querySelector(".rename-dialog-panel"), close, closed };
+}
+
+const ART_KINDS = [
+  { kind: "portrait", label: "Cover" },
+  { kind: "landscape", label: "Wide" },
+  { kind: "hero", label: "Hero" },
+  { kind: "logo", label: "Logo" }
+];
+
+async function showArtDialog(game) {
+  const name = getDisplayName(game.appName);
+  const modal = openModal(
+    `
+    <h3>Change Art</h3>
+    <p data-role="title"></p>
+    <div class="art-tabs">${ART_KINDS.map((k) => `<button type="button" data-kind="${k.kind}">${k.label}</button>`).join("")}</div>
+    <div class="art-grid" data-role="grid"><p>Loading...</p></div>
+    <div class="rename-dialog-actions">
+      <button type="button" data-role="file">From File...</button>
+      <button type="button" data-role="close">Done</button>
+    </div>
+  `,
+    "art-dialog-panel"
+  );
+  const { panel } = modal;
+  panel.querySelector('[data-role="title"]').textContent = name;
+  panel.querySelector('[data-role="close"]').addEventListener("click", modal.close);
+  const grid = panel.querySelector('[data-role="grid"]');
+  let kind = "portrait";
+  let options = null;
+  let changed = false;
+
+  const apply = async (source) => {
+    const response = await window.steamDrop.setArt({ shortcutId: game.shortcutId, kind, ...source });
+    if (!response.ok) {
+      log(`ERROR: ${response.error || "Could not set art."}`);
+      return false;
+    }
+    changed = true;
+    log(`Updated ${kind} art for ${name}.`);
+    grid.querySelectorAll(".art-option.chosen").forEach((el) => el.classList.remove("chosen"));
+    return true;
+  };
+
+  const renderKind = () => {
+    panel.querySelectorAll(".art-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.kind === kind));
+    if (!options) return;
+    grid.innerHTML = "";
+    grid.dataset.kind = kind;
+    const list = options[kind] || [];
+    if (list.length === 0) {
+      const empty = document.createElement("p");
+      empty.textContent = "No online results. Use From File, or set a SteamGridDB API key for more options.";
+      grid.appendChild(empty);
+      return;
+    }
+    for (const option of list) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "art-option";
+      button.title = option.source;
+      const img = document.createElement("img");
+      img.src = option.thumb;
+      img.loading = "lazy";
+      img.alt = option.source;
+      button.appendChild(img);
+      button.addEventListener("click", async () => {
+        if (await apply({ url: option.url })) button.classList.add("chosen");
+      });
+      grid.appendChild(button);
+    }
+  };
+
+  panel.querySelectorAll(".art-tabs button").forEach((button) =>
+    button.addEventListener("click", () => {
+      kind = button.dataset.kind;
+      renderKind();
+    })
+  );
+  panel.querySelector('[data-role="file"]').addEventListener("click", async () => {
+    const filePath = await window.steamDrop.pickArtFile();
+    if (filePath) await apply({ filePath });
+  });
+
+  renderKind();
+  window.steamDrop.listArtOptions(game.shortcutId).then((response) => {
+    if (!response.ok) {
+      grid.innerHTML = "";
+      log(`ERROR: ${response.error || "Could not load art options."}`);
+      return;
+    }
+    options = response.options;
+    renderKind();
+  });
+
+  await modal.closed;
+  if (changed) {
+    artVersion = Date.now();
+    setRestartRequired(true);
+    await refreshGames();
+  }
+}
+
+async function toggleSyncFromMenu(game) {
+  const name = getDisplayName(game.appName);
+  if (game.syncEnabled) {
+    const response = await window.steamDrop.disableSync(game.shortcutId);
+    if (!response.ok) {
+      log(`ERROR: ${response.error || "Could not turn off save sync."}`);
+      return;
+    }
+    log(`Save sync off for ${name}. Cloud copies are left untouched.`);
+  } else {
+    log(`Setting up save sync for ${name}...`);
+    const response = await window.steamDrop.enableSync(game.shortcutId);
+    if (!response.ok) {
+      log(`ERROR: ${response.error || "Could not turn on save sync."}`);
+      return;
+    }
+    if (response.canceled) return;
+    log(
+      response.fromCloud
+        ? `Save sync on for ${name}, using the save folder set up on ${response.cloudDevice || "another device"}.`
+        : `Save sync on for ${name}.`
+    );
+    log(`  Cloud key: ${response.key} (give the game the same name on your other devices)`);
+    log(`  Save folder: ${response.resolvedPath}`);
+  }
+  setRestartRequired(true);
+  await refreshGames();
+}
+
+async function showCloudDialog() {
+  const current = await window.steamDrop.getCloudSettings();
+  const modal = openModal(`
+    <h3>Cloud Saves</h3>
+    <p>Saves sync through rclone (rclone.org). Install it on each device and connect the same cloud account on each one.</p>
+    <p class="rename-path-label">rclone executable (leave empty if it is on PATH)</p>
+    <div class="inline-row">
+      <input type="text" data-role="rclone" placeholder="rclone" />
+      <button type="button" data-role="browse">Browse...</button>
+    </div>
+    <p class="rename-path-label">Remote</p>
+    <input type="text" data-role="remote" placeholder="nsu:" />
+    <p class="rename-path-label">Or connect a new account (opens your browser)</p>
+    <div class="inline-row">
+      <button type="button" data-provider="drive">Google Drive</button>
+      <button type="button" data-provider="onedrive">OneDrive</button>
+      <button type="button" data-provider="dropbox">Dropbox</button>
+    </div>
+    <p data-role="status"></p>
+    <div class="rename-dialog-actions">
+      <button type="button" data-role="test">Test</button>
+      <button type="button" data-role="save">Save</button>
+    </div>
+  `);
+  const { panel } = modal;
+  const rclone = panel.querySelector('[data-role="rclone"]');
+  const remote = panel.querySelector('[data-role="remote"]');
+  const status = panel.querySelector('[data-role="status"]');
+  rclone.value = current.rclonePath || "";
+  remote.value = current.rcloneRemote || "";
+  const values = () => ({ rclonePath: rclone.value.trim(), rcloneRemote: remote.value.trim() });
+
+  panel.querySelector('[data-role="browse"]').addEventListener("click", async () => {
+    const picked = await window.steamDrop.pickRclone();
+    if (picked) rclone.value = picked;
+  });
+  panel.querySelectorAll("[data-provider]").forEach((button) =>
+    button.addEventListener("click", async () => {
+      status.textContent = "Waiting for you to log in in the browser...";
+      const response = await window.steamDrop.connectCloud({ type: button.dataset.provider, rclonePath: values().rclonePath });
+      status.textContent = response.ok ? "Connected." : `Error: ${response.error}`;
+      if (response.ok) remote.value = response.rcloneRemote;
+    })
+  );
+  panel.querySelector('[data-role="test"]').addEventListener("click", async () => {
+    status.textContent = "Testing...";
+    const response = await window.steamDrop.testCloud(values());
+    status.textContent = response.ok ? "Cloud reachable." : `Error: ${response.error}`;
+  });
+  panel.querySelector('[data-role="save"]').addEventListener("click", async () => {
+    const response = await window.steamDrop.saveCloudSettings(values());
+    if (!response.ok) {
+      status.textContent = `Error: ${response.error}`;
+      return;
+    }
+    log(values().rcloneRemote ? `Cloud saves use remote ${values().rcloneRemote}` : "Cloud saves disabled (no remote).");
+    modal.close();
+  });
+  await modal.closed;
+}
+
+if (cloudBtn) {
+  cloudBtn.addEventListener("click", showCloudDialog);
 }
 
 function isSupportedGameFile(filePath) {

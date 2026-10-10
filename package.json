@@ -1,12 +1,13 @@
 {
   "name": "non-steam-uploader",
   "version": "1.0.2",
-  "description": "Drag-and-drop app to add games to Steam with artwork fetching.",
+  "description": "Add non-Steam games to Steam with artwork, and sync their saves across devices (PC <-> Steam Deck).",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build:win": "electron-builder --win nsis",
-    "build:win-portable": "electron-builder --win portable"
+    "build:win-portable": "electron-builder --win portable",
+    "build:linux": "electron-builder --linux AppImage"
   },
   "keywords": [
     "steam",
@@ -46,6 +47,13 @@
       "installerIcon": "icon.ico",
       "uninstallerIcon": "icon.ico",
       "installerHeaderIcon": "icon.ico"
+    },
+    "linux": {
+      "icon": "icon.png",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Game"
     }
   }
 }
