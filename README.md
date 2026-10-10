@@ -14,7 +14,7 @@ Add non-Steam games to your Steam library with artwork, fast management tools, a
 - Automatic Steam shortcut creation in the latest Steam user profile.
 - Artwork: official Steam assets first, with optional SteamGridDB fallback.
 - In-app SteamGridDB API key setup (with optional first-run prompt).
-- Right-click actions: rename, delete, `VR Game` toggle, **Change Art** and **Save Sync**.
+- Right-click actions: rename, delete, `VR Game` toggle, **Change Art** and **cloud saves** (works on several selected games at once).
 - Art picker: browse every official Steam / SteamGridDB image per slot (cover, wide, hero, logo) or use your own file.
 - Cross-device save sync (PC <-> Steam Deck), like Steam Cloud for non-Steam games.
 - Runs on Windows and Linux / Steam Deck (AppImage, Proton set automatically).
@@ -55,9 +55,10 @@ https://www.steamgriddb.com/profile/preferences/api
 ## Save Sync ☁️
 
 1. Click **Cloud Saves** and connect Google Drive / OneDrive / Dropbox. Do this on every device. Nothing needs to be installed: [rclone](https://rclone.org) ships inside the app (fetched by `npm install` / the build scripts into `vendor/`) and keeps its own config in the app data folder.
-2. Right-click a game → **Save Sync...**. On the first device the app looks the game up in the [Ludusavi manifest](https://github.com/mtkennerly/ludusavi-manifest) (save locations for ~20k games, from PCGamingWiki), matched by name or Steam app ID, and suggests the folder. Confirm it, or choose another folder by hand.
-3. On your other devices, add the same game **with the same name** and turn on Save Sync. The save folder is picked up from the cloud automatically.
-4. Restart Steam. Launching the game from Steam now downloads the newest save first and uploads yours when you quit.
+2. Add games. Once a cloud account is connected, every newly added game gets cloud saves automatically when its save location is known: either it's already in your cloud from another device, or it's in the [Ludusavi manifest](https://github.com/mtkennerly/ludusavi-manifest) (save locations for ~20k games, from PCGamingWiki, matched by name or Steam app ID). Unknown games are skipped and you're told which ones.
+3. For an existing or unknown game, right-click it → **Turn on cloud saves**. With one game selected you confirm the suggested folder or pick it by hand. With several selected, they're all turned on in one go (unknown ones are skipped). If every selected game already syncs, the same item turns them all off.
+4. On your other devices, add the same game **with the same name**. The save folder is picked up from the cloud automatically. Renaming a synced game keeps sync on; the cloud copy then follows the new name.
+5. Restart Steam. Launching the game from Steam now downloads the newest save first and uploads yours when you quit.
 
 **Cloud Saves** also shows the linked devices (name, OS, games, last seen), lets you rename this device or forget old ones, and lists every synced game with the devices that share it and who uploaded last.
 

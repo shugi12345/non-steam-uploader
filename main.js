@@ -115,12 +115,35 @@ ipcMain.handle("app:removeAll", async () => {
   }
 });
 
+// A synced game is unwrapped for the rename (its Steam id changes with the name), then re-wrapped
+// under the new id. The cloud key follows the new name, so other devices should use the same name.
 ipcMain.handle("app:renameGame", async (_, payload) => {
   try {
     const settings = await readAppSettings();
-    return await renameGame(payload, {
-      apiKey: settings.steamGridDbApiKey
-    });
+    const id = String(Number(payload?.shortcutId) >>> 0);
+    const sync = settings.syncGames[id];
+    if (sync) await unwrapShortcut(id, sync.gameExe);
+
+    let response;
+    try {
+      response = await renameGame(payload, { apiKey: settings.steamGridDbApiKey });
+    } catch (error) {
+      response = { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
+    }
+    if (!sync) return response;
+    if (!response.ok) {
+      await wrapShortcut(id, getWrapper()).catch(() => {});
+      return response;
+    }
+
+    const newId = String(response.result.shortcutId);
+    await wrapShortcut(newId, getWrapper());
+    delete settings.syncGames[id];
+    const name = response.result.appName;
+    settings.syncGames[newId] = { ...sync, key: saveSync.gameKey(name), name, lastSync: null, localMtime: 0 };
+    await writeAppSettings(settings);
+    await publishDevice(settings).catch(() => {});
+    return response;
   } catch (error) {
     return {
       ok: false,
@@ -457,21 +480,20 @@ ipcMain.handle("app:addSelfToSteam", async () => {
   }
 });
 
+// Looks the game up in the Ludusavi manifest. Null when unknown, or offline with no cached list.
+async function detectSaveFolderFor(game, bases) {
+  try {
+    const steamId = await findSteamAppId(game.appName).catch(() => null);
+    return await detectSaveFolder({ name: game.appName, steamId, bases, cacheDir: app.getPath("userData") });
+  } catch {
+    return null;
+  }
+}
+
 // Suggests a save folder from the Ludusavi manifest and lets the user confirm or pick another.
 // Returns a path token, or null when canceled.
 async function chooseSaveFolder(game, bases) {
-  let detected = null;
-  try {
-    const steamId = await findSteamAppId(game.appName).catch(() => null);
-    detected = await detectSaveFolder({
-      name: game.appName,
-      steamId,
-      bases,
-      cacheDir: app.getPath("userData")
-    });
-  } catch {
-    // Offline and no cached list: fall through to the manual picker.
-  }
+  const detected = await detectSaveFolderFor(game, bases);
 
   let defaultPath = process.platform === "win32" ? bases.AppData : fs.existsSync(bases.Home) ? bases.Home : undefined;
   if (detected) {
@@ -514,21 +536,32 @@ function getSyncBases(shortcutId, gameDir) {
 
 ipcMain.handle("app:enableSync", async (_, payload) => {
   try {
+    // auto: no dialogs (used after adding a game and for batches). Unknown games are skipped, not asked about.
+    const auto = Boolean(payload?.auto);
     const settings = await readAppSettings();
     if (!settings.rcloneRemote) {
-      throw new Error("Set up Cloud Saves first (bottom bar).");
+      if (auto) return { ok: true, skipped: "Cloud saves aren't connected." };
+      throw new Error("Connect a cloud account first (Cloud Saves, top right).");
     }
 
     const game = await findGame(payload?.shortcutId);
     if (!game) {
       throw new Error("Game not found in managed list.");
     }
+    if (settings.syncGames[String(game.shortcutId)]) {
+      return { ok: true, alreadyOn: true };
+    }
 
     const key = saveSync.gameKey(game.appName);
     const bases = getSyncBases(game.shortcutId, game.startDir);
     const meta = await saveSync.readMeta(getSyncConfig(settings), key);
 
-    const savePath = meta?.savePath || (await chooseSaveFolder(game, bases));
+    let savePath = meta?.savePath;
+    if (!savePath && auto) {
+      savePath = (await detectSaveFolderFor(game, bases))?.best.token;
+      if (!savePath) return { ok: true, skipped: "Save location unknown. Turn it on from the game's menu to pick the folder." };
+    }
+    savePath = savePath || (await chooseSaveFolder(game, bases));
     if (!savePath) {
       return { ok: true, canceled: true };
     }

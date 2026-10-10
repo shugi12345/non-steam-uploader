@@ -706,6 +706,18 @@ async function processExeBatch(paths, label) {
     toast(
       addedGames.length === 1 ? `Added ${prettyGameName(addedGames[0].appName)} to Steam` : `Added ${plural(addedGames.length, "game")} to Steam`
     );
+
+    // New games get cloud saves automatically when the save location is known.
+    if (await isCloudConnected()) {
+      const syncLabel = "Setting up cloud saves";
+      setProgressState({ visible: true, label: syncLabel, done: 0, total: addedGames.length });
+      reportSyncResult(
+        await enableSyncFor(addedGames, {
+          auto: true,
+          onStep: (done) => setProgressState({ visible: true, label: syncLabel, done, total: addedGames.length })
+        })
+      );
+    }
   }
 
   await refreshGames();
@@ -863,8 +875,8 @@ function createGameContextMenu() {
       await renameGameFromMenu(single, getDisplayName(single.appName));
     } else if (actionButton.dataset.action === "art" && single) {
       await showArtDialog(single);
-    } else if (actionButton.dataset.action === "sync" && single) {
-      await toggleSyncFromMenu(single);
+    } else if (actionButton.dataset.action === "sync") {
+      await setSyncFromMenu(target.games);
     }
   });
 
@@ -889,13 +901,16 @@ function showGameMenu(x, y, targetGames) {
   vrToggle.indeterminate = !allSame;
   vrToggle.checked = allSame ? vrStates[0] : false;
 
-  for (const action of ["rename", "art", "sync"]) {
+  for (const action of ["rename", "art"]) {
     const button = gameMenu.querySelector(`button[data-action="${action}"]`);
     button.disabled = !single;
     button.title = single ? "" : "Select one game for this.";
   }
-  gameMenu.querySelector('[data-role="sync-label"]').textContent =
-    single && targetGames[0].syncEnabled ? "Turn off cloud saves" : "Turn on cloud saves";
+  const allSynced = targetGames.every((game) => game.syncEnabled);
+  const notSynced = targetGames.filter((game) => !game.syncEnabled).length;
+  gameMenu.querySelector('[data-role="sync-label"]').textContent = allSynced
+    ? `Turn off cloud saves${single ? "" : ` (${targetGames.length})`}`
+    : `Turn on cloud saves${single ? "" : ` (${notSynced})`}`;
   gameMenu.querySelector('button[data-action="delete"] span').textContent = single
     ? "Remove from Steam"
     : `Remove ${targetGames.length} from Steam`;
@@ -999,6 +1014,9 @@ async function renameGameFromMenu(game, displayName) {
 
   const result = renamed.result || {};
   log(`Renamed shortcut: ${displayName} -> ${result.appName || trimmed}`);
+  if (game.syncEnabled) {
+    log("  Cloud saves now use the new name. Use the same name on your other devices.");
+  }
   log(`Artwork source: ${result.artworkSource || "none"}`);
   log(`Saved ${(result.savedArtwork || []).length} artwork file(s).`);
 
@@ -1396,32 +1414,85 @@ async function showArtDialog(game) {
 }
 
 // ---------- Cloud saves ----------
-async function toggleSyncFromMenu(game) {
-  const name = getDisplayName(game.appName);
-  if (game.syncEnabled) {
-    const response = await window.steamDrop.disableSync(game.shortcutId);
+// Turns cloud saves on for each game. auto = no dialogs: use the cloud's or the detected save folder,
+// and skip games whose save location is unknown.
+async function enableSyncFor(games, { auto, onStep = () => {} }) {
+  const result = { on: [], skipped: [], failed: 0 };
+  for (const [index, game] of games.entries()) {
+    const name = getDisplayName(game.appName);
+    const response = await window.steamDrop.enableSync(game.shortcutId, auto);
+    onStep(index + 1);
     if (!response.ok) {
-      log(`ERROR: ${response.error || "Could not turn off save sync."}`);
-      return;
+      log(`ERROR: ${name}: ${response.error || "Could not turn on cloud saves."}`);
+      result.failed += 1;
+      continue;
     }
-    log(`Save sync off for ${name}. Cloud copies are left untouched.`);
-    toast(`Cloud saves off for ${name}`, "info");
-  } else {
-    log(`Setting up save sync for ${name}...`);
-    const response = await window.steamDrop.enableSync(game.shortcutId);
-    if (!response.ok) {
-      log(`ERROR: ${response.error || "Could not turn on save sync."}`);
-      return;
+    if (response.canceled || response.alreadyOn) continue;
+    if (response.skipped) {
+      result.skipped.push(name);
+      log(`Cloud saves not turned on for ${name}: ${response.skipped}`);
+      continue;
     }
-    if (response.canceled) return;
+    result.on.push(name);
     log(
       response.fromCloud
-        ? `Save sync on for ${name}, using the save folder set up on ${response.cloudDevice || "another device"}.`
-        : `Save sync on for ${name}.`
+        ? `Cloud saves on for ${name}, using the save folder set up on ${response.cloudDevice || "another device"}.`
+        : `Cloud saves on for ${name}.`
     );
     log(`  Cloud key: ${response.key} (give the game the same name on your other devices)`);
     log(`  Save folder: ${response.resolvedPath}`);
-    toast(`Cloud saves on for ${name}`);
+  }
+  return result;
+}
+
+function reportSyncResult({ on, skipped }) {
+  const names = (list) => (list.length === 1 ? list[0] : plural(list.length, "game"));
+  if (on.length > 0) toast(`Cloud saves on for ${names(on)}`);
+  if (skipped.length > 0) {
+    toast(
+      `Couldn't find where ${skipped.length === 1 ? skipped[0] : `${skipped.length} games`} save${skipped.length === 1 ? "s" : ""}. ` +
+        "Right-click to turn cloud saves on and pick the folder.",
+      "info"
+    );
+  }
+}
+
+async function isCloudConnected() {
+  const settings = await window.steamDrop.getCloudSettings().catch(() => null);
+  return Boolean(settings?.rcloneRemote);
+}
+
+// One game: the interactive flow (confirm or pick the folder). Several: batch, no dialogs.
+// If every selected game is synced this turns them all off; otherwise it turns on the rest.
+async function setSyncFromMenu(games) {
+  if (games.every((game) => game.syncEnabled)) {
+    let off = 0;
+    for (const game of games) {
+      const response = await window.steamDrop.disableSync(game.shortcutId);
+      if (!response.ok) {
+        log(`ERROR: ${getDisplayName(game.appName)}: ${response.error || "Could not turn off cloud saves."}`);
+        continue;
+      }
+      off += 1;
+      log(`Cloud saves off for ${getDisplayName(game.appName)}. Cloud copies are left untouched.`);
+    }
+    if (off > 0) toast(`Cloud saves off for ${off === 1 ? getDisplayName(games[0].appName) : plural(off, "game")}`, "info");
+  } else {
+    if (!(await isCloudConnected())) {
+      toast("Connect a cloud account first", "err", { label: "Set up", run: showCloudDialog });
+      return;
+    }
+    const targets = games.filter((game) => !game.syncEnabled);
+    const batch = targets.length > 1;
+    const label = "Turning on cloud saves";
+    if (batch) setProgressState({ visible: true, label, done: 0, total: targets.length });
+    const result = await enableSyncFor(targets, {
+      auto: batch,
+      onStep: (done) => batch && setProgressState({ visible: true, label, done, total: targets.length })
+    });
+    reportSyncResult(result);
+    if (batch) setTimeout(() => setProgressState({ visible: false }), 700);
+    if (result.on.length === 0) return;
   }
   setRestartRequired(true);
   await refreshGames();
