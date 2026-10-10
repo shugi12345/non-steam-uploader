@@ -28,6 +28,10 @@ let mainWindowRef = null;
 
 // Launched by a Steam shortcut as `--nsu-wrap <shortcutId> -- <game command>`: sync, run game, sync, exit.
 const isWrapMode = process.argv.includes("--nsu-wrap");
+// Deck Game Mode (gamescope) only shows the game's own windows, so a dialog from the wrapper
+// would sit invisible and leave Steam stuck on the loading screen. There we never block on one.
+const isGameMode = process.env.XDG_CURRENT_DESKTOP === "gamescope" || Boolean(process.env.GAMESCOPE_WAYLAND_DISPLAY);
+if (isWrapMode) app.disableHardwareAcceleration(); // wrapper only ever shows message boxes
 const hasSingleInstanceLock = isWrapMode ? false : app.requestSingleInstanceLock();
 if (!isWrapMode && !hasSingleInstanceLock) {
   app.quit();
@@ -403,8 +407,12 @@ function getSyncConfig(settings) {
     deviceId: settings.deviceId,
     deviceName: getDeviceName(settings),
     backupsRoot: path.join(app.getPath("userData"), "save-backups"),
+    // Wrapper: a dead network must fail fast rather than hold up the game launch.
+    extraArgs: isWrapMode ? ["--contimeout", "15s", "--timeout", "30s", "--retries", "1", "--low-level-retries", "3"] : [],
     ask: async (message, buttons, defaultId = 0) =>
-      (
+      isWrapMode && isGameMode
+        ? (wrapLog(`auto-answered "${buttons[defaultId]}": ${message}`), defaultId)
+        : (
         await dialog.showMessageBox({
           type: "question",
           title: "Non-Steam Uploader - Save Sync",
@@ -606,13 +614,29 @@ ipcMain.handle("app:disableSync", async (_, shortcutId) => {
   }
 });
 
+// <userData>/wrap.log: what the wrapper did on each launch (the only trace in Game Mode).
+function wrapLog(line) {
+  try {
+    const file = path.join(app.getPath("userData"), "wrap.log");
+    if (fs.existsSync(file) && fs.statSync(file).size > 256 * 1024) fs.rmSync(file);
+    fs.appendFileSync(file, `${new Date().toISOString()} ${line}
+`);
+  } catch {}
+}
+
+function wrapError(message) {
+  wrapLog(`ERROR ${message}`);
+  if (!isGameMode) dialog.showErrorBox("Non-Steam Uploader", message);
+}
+
 async function runWrapMode() {
+  wrapLog(`start ${JSON.stringify(process.argv.slice(1))} gameMode=${isGameMode}`);
   const flagIndex = process.argv.indexOf("--nsu-wrap");
   const shortcutId = String(Number(process.argv[flagIndex + 1]) >>> 0);
   const separator = process.argv.indexOf("--", flagIndex);
   const command = separator >= 0 ? process.argv.slice(separator + 1) : [];
   if (command.length === 0) {
-    dialog.showErrorBox("Non-Steam Uploader", "No game command was given to --nsu-wrap.");
+    wrapError("No game command was given to --nsu-wrap.");
     return 1;
   }
 
@@ -629,7 +653,7 @@ async function runWrapMode() {
       // First Deck launch: Proton hasn't created the prefix yet. Skip the pull; the post-game
       // step sees the cloud save and offers to replace whatever the fresh game wrote.
       if (process.platform === "win32" || fs.existsSync(bases.Home)) {
-        await saveSync.syncBeforeLaunch(cfg, state, localDir);
+        wrapLog(`pre-launch sync: ${await saveSync.syncBeforeLaunch(cfg, state, localDir)}`);
         await writeAppSettings(settings);
       }
     } catch (error) {
@@ -642,6 +666,7 @@ async function runWrapMode() {
   // the next launch uploads the leftover changes before starting (see syncBeforeLaunch).
   process.on("SIGTERM", () => {});
 
+  wrapLog(`launching game`);
   const exitCode = await new Promise((resolve) => {
     // ponytail: waits for the launched process only; games whose launcher exits early get backed up too soon.
     const child = spawn(command[0], command.slice(1), {
@@ -649,7 +674,7 @@ async function runWrapMode() {
       stdio: "inherit"
     });
     child.on("error", (error) => {
-      dialog.showErrorBox("Non-Steam Uploader", `Could not start the game:\n${error.message}`);
+      wrapError(`Could not start the game:\n${error.message}`);
       resolve(1);
     });
     child.on("exit", (code) => resolve(code ?? 0));
@@ -661,7 +686,7 @@ async function runWrapMode() {
       const fresh = await readAppSettings();
       const freshState = fresh.syncGames[shortcutId] || state;
       Object.assign(freshState, { lastSync: state.lastSync, localMtime: state.localMtime });
-      await saveSync.syncAfterExit(getSyncConfig(fresh), freshState, localDir);
+      wrapLog(`game exited; post-game sync: ${await saveSync.syncAfterExit(getSyncConfig(fresh), freshState, localDir)}`);
       fresh.syncGames[shortcutId] = freshState;
       await writeAppSettings(fresh);
       await publishDevice(fresh).catch(() => {});
@@ -877,10 +902,13 @@ if (isWrapMode) {
     .whenReady()
     .then(runWrapMode)
     .catch((error) => {
-      dialog.showErrorBox("Non-Steam Uploader", error instanceof Error ? error.message : String(error));
+      wrapError(error instanceof Error ? error.stack || error.message : String(error));
       return 1;
     })
-    .then((code) => app.exit(code));
+    .then((code) => {
+      wrapLog(`exit ${code}`);
+      app.exit(code);
+    });
 }
 
 app.on("window-all-closed", () => {
