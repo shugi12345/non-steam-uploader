@@ -55,22 +55,31 @@ https://www.steamgriddb.com/profile/preferences/api
 ## Save Sync ☁️
 
 1. Click **Cloud Saves** and connect Google Drive / OneDrive / Dropbox. Do this on every device. Nothing needs to be installed: [rclone](https://rclone.org) ships inside the app (fetched by `npm install` / the build scripts into `vendor/`) and keeps its own config in the app data folder.
-2. Right-click a game → **Save Sync...**. On the first device, pick the game's save folder (usually under `%APPDATA%`, `%LOCALAPPDATA%`, `LocalLow` or `Documents`, or inside the game folder).
+2. Right-click a game → **Save Sync...**. On the first device the app looks the game up in the [Ludusavi manifest](https://github.com/mtkennerly/ludusavi-manifest) (save locations for ~20k games, from PCGamingWiki), matched by name or Steam app ID, and suggests the folder. Confirm it, or choose another folder by hand.
 3. On your other devices, add the same game **with the same name** and turn on Save Sync. The save folder is picked up from the cloud automatically.
 4. Restart Steam. Launching the game from Steam now downloads the newest save first and uploads yours when you quit.
+
+**Cloud Saves** also shows the linked devices (name, OS, games, last seen), lets you rename this device or forget old ones, and lists every synced game with the devices that share it and who uploaded last.
 
 How it works:
 
 - The shortcut launches the game through this app (`--nsu-wrap`). On Windows, the shortcut target becomes this app. On the Deck, the launch options become `"<AppImage>" --nsu-wrap <id> -- %command%` so Proton still applies. Keep the AppImage / exe where it is after enabling sync.
 - Save folders are stored as portable paths (`{AppData}/Game/Saves`), which map to the shortcut's Proton prefix on the Deck.
-- If both devices changed the save, you're asked which one to keep. Before any download overwrites local files, the local save is copied to `<app data>/save-backups/<game>/` (last 5 kept).
-- Cloud layout: `<remote>non-steam-saves/<game-key>/{meta.json,files/}`.
+- If both the cloud and this device changed since the last sync, you're asked which save to continue from, like Steam Cloud. Both save times and devices are shown, and the newer one is pre-selected. Before any download overwrites local files, the local save is copied to `<app data>/save-backups/<game>/` (last 5 kept).
+- Cloud layout: `<remote>non-steam-saves/<game-key>/{meta.json,files/}` plus `non-steam-saves/_devices/<device-id>.json`.
+
+### Steam Deck Game Mode
+
+- Sync works in Game Mode as is: it runs from each game's Steam launch options, so this app's window never has to be open.
+- To open the app itself from Game Mode, use **Cloud Saves → Add This App to Steam** once (in Desktop Mode).
+- Quitting from the Steam overlay: the wrapper ignores Steam's stop signal and uploads once the game exits. If Steam force-kills it first, the leftover changes upload automatically at the start of the next launch.
+- No Decky Loader plugin is needed.
 
 Limits:
 
 - On the Deck, the very first launch has no Proton prefix yet, so nothing is downloaded. When you quit, you're offered the cloud save.
 - A game whose launcher exits immediately (the launcher starts the real game, then quits) gets backed up too early.
-- Quitting from the Steam overlay in Game Mode can kill the wrapper before it uploads. Use the game's own quit option instead.
+- One save folder per game. Games that keep their save as a single file in the install folder root need a manual pick.
 - Turn off sync before renaming a game (the cloud save is keyed on the name).
 
 ## Data Written By The App 🗂️

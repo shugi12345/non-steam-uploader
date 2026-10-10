@@ -416,6 +416,42 @@ body {
   border-color: var(--ok);
 }
 
+.cloud-dialog-panel {
+  width: min(620px, calc(100vw - 28px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+}
+
+.cloud-list {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.cloud-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(84, 201, 255, 0.08);
+  border: 1px solid rgba(200, 223, 255, 0.14);
+}
+
+.cloud-row strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.cloud-row span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .inline-row {
   display: flex;
   gap: 8px;

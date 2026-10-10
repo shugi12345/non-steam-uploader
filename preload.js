@@ -23,5 +23,10 @@ contextBridge.exposeInMainWorld("steamDrop", {
   connectCloud: (payload) => ipcRenderer.invoke("app:connectCloud", payload),
   testCloud: (payload) => ipcRenderer.invoke("app:testCloud", payload),
   enableSync: (shortcutId) => ipcRenderer.invoke("app:enableSync", { shortcutId }),
-  disableSync: (shortcutId) => ipcRenderer.invoke("app:disableSync", shortcutId)
+  disableSync: (shortcutId) => ipcRenderer.invoke("app:disableSync", shortcutId),
+  getCloudOverview: () => ipcRenderer.invoke("app:getCloudOverview"),
+  renameDevice: (name) => ipcRenderer.invoke("app:renameDevice", name),
+  forgetDevice: (deviceId) => ipcRenderer.invoke("app:forgetDevice", deviceId),
+  addSelfToSteam: () => ipcRenderer.invoke("app:addSelfToSteam"),
+  platform: process.platform
 });

@@ -2,6 +2,8 @@
 const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
+const crypto = require("crypto");
+const os = require("os");
 const {
   processInput,
   getGames,
@@ -15,8 +17,10 @@ const {
   wrapShortcut,
   unwrapShortcut
 } = require("./lib/processor");
-const { getSteamInstallPath, ensureProtonMappings } = require("./lib/steamShortcuts");
+const { getSteamInstallPath, ensureProtonMappings, addAppShortcut } = require("./lib/steamShortcuts");
 const saveSync = require("./lib/saveSync");
+const { detectSaveFolder } = require("./lib/saveLocations");
+const { findSteamAppId } = require("./lib/artwork");
 
 let reloadTimer = null;
 let relaunching = false;
@@ -368,20 +372,130 @@ function getSyncConfig(settings) {
   return {
     ...getRclone(),
     remote: settings.rcloneRemote,
+    deviceId: settings.deviceId,
+    deviceName: getDeviceName(settings),
     backupsRoot: path.join(app.getPath("userData"), "save-backups"),
-    ask: async (message, buttons) =>
+    ask: async (message, buttons, defaultId = 0) =>
       (
         await dialog.showMessageBox({
           type: "question",
           title: "Non-Steam Uploader - Save Sync",
           message,
           buttons,
-          defaultId: 0,
+          defaultId,
           cancelId: buttons.length - 1,
           noLink: true
         })
       ).response
   };
+}
+
+function getDeviceName(settings) {
+  return settings.deviceName || os.hostname();
+}
+
+// Publishes this device and the games it syncs to the cloud's linked-devices list.
+async function publishDevice(settings) {
+  if (!settings.rcloneRemote) return null;
+  return saveSync.writeDevice(getSyncConfig(settings), {
+    id: settings.deviceId,
+    name: getDeviceName(settings),
+    platform: process.platform,
+    games: Object.values(settings.syncGames).map((g) => ({ key: g.key, name: g.name || g.key }))
+  });
+}
+
+ipcMain.handle("app:getCloudOverview", async () => {
+  try {
+    const settings = await readAppSettings();
+    if (!settings.rcloneRemote) {
+      return { ok: true, connected: false, thisDeviceId: settings.deviceId, deviceName: getDeviceName(settings) };
+    }
+    await publishDevice(settings);
+    const overview = await saveSync.listCloud(getSyncConfig(settings));
+    return { ok: true, connected: true, thisDeviceId: settings.deviceId, deviceName: getDeviceName(settings), ...overview };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+});
+
+ipcMain.handle("app:renameDevice", async (_, name) => {
+  try {
+    const settings = await readAppSettings();
+    settings.deviceName = String(name || "").trim();
+    await writeAppSettings(settings);
+    await publishDevice(settings);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+});
+
+ipcMain.handle("app:forgetDevice", async (_, deviceId) => {
+  try {
+    const settings = await readAppSettings();
+    await saveSync.forgetDevice(getSyncConfig(settings), String(deviceId));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+});
+
+// Adds this app itself to Steam so it can be opened from Game Mode on the Deck.
+ipcMain.handle("app:addSelfToSteam", async () => {
+  try {
+    const wrapper = getWrapper();
+    await addAppShortcut({ exe: wrapper.exe, args: wrapper.args, appName: "Non-Steam Uploader" });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+});
+
+// Suggests a save folder from the Ludusavi manifest and lets the user confirm or pick another.
+// Returns a path token, or null when canceled.
+async function chooseSaveFolder(game, bases) {
+  let detected = null;
+  try {
+    const steamId = await findSteamAppId(game.appName).catch(() => null);
+    detected = await detectSaveFolder({
+      name: game.appName,
+      steamId,
+      bases,
+      cacheDir: app.getPath("userData")
+    });
+  } catch {
+    // Offline and no cached list: fall through to the manual picker.
+  }
+
+  let defaultPath = process.platform === "win32" ? bases.AppData : fs.existsSync(bases.Home) ? bases.Home : undefined;
+  if (detected) {
+    const { best } = detected;
+    const { response } = await dialog.showMessageBox({
+      type: "question",
+      title: "Save Sync",
+      message: `Found where ${game.appName} keeps its saves:`,
+      detail:
+        `${best.absPath}\n\n` +
+        (best.exists ? "" : "This folder doesn't exist yet. It will sync once the game creates it.\n\n") +
+        `Source: PCGamingWiki via the Ludusavi manifest (${detected.manifestName}).`,
+      buttons: ["Use this folder", "Choose another folder...", "Cancel"],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true
+    });
+    if (response === 0) return best.token;
+    if (response === 2) return null;
+    if (best.exists) defaultPath = best.absPath;
+  }
+
+  const picked = await dialog.showOpenDialog({
+    title: `Select the save folder for ${game.appName}`,
+    defaultPath,
+    properties: ["openDirectory"]
+  });
+  if (picked.canceled || picked.filePaths.length === 0) return null;
+  return saveSync.tokenizePath(picked.filePaths[0], bases);
 }
 
 function getSyncBases(shortcutId, gameDir) {
@@ -409,23 +523,15 @@ ipcMain.handle("app:enableSync", async (_, payload) => {
     const bases = getSyncBases(game.shortcutId, game.startDir);
     const meta = await saveSync.readMeta(getSyncConfig(settings), key);
 
-    let savePath = meta?.savePath || "";
+    const savePath = meta?.savePath || (await chooseSaveFolder(game, bases));
     if (!savePath) {
-      const defaultPath = process.platform === "win32" ? bases.AppData : fs.existsSync(bases.Home) ? bases.Home : undefined;
-      const picked = await dialog.showOpenDialog({
-        title: `Select the save folder for ${game.appName}`,
-        defaultPath,
-        properties: ["openDirectory"]
-      });
-      if (picked.canceled || picked.filePaths.length === 0) {
-        return { ok: true, canceled: true };
-      }
-      savePath = saveSync.tokenizePath(picked.filePaths[0], bases);
+      return { ok: true, canceled: true };
     }
 
     const { gameExe } = await wrapShortcut(game.shortcutId, getWrapper());
     settings.syncGames[String(game.shortcutId)] = {
       key,
+      name: game.appName,
       savePath,
       gameExe: gameExe || settings.syncGames[String(game.shortcutId)]?.gameExe || game.exePath,
       gameDir: game.startDir,
@@ -433,6 +539,7 @@ ipcMain.handle("app:enableSync", async (_, payload) => {
       localMtime: 0
     };
     await writeAppSettings(settings);
+    await publishDevice(settings).catch(() => {});
 
     return {
       ok: true,
@@ -454,6 +561,7 @@ ipcMain.handle("app:disableSync", async (_, shortcutId) => {
     await unwrapShortcut(id, settings.syncGames[id]?.gameExe);
     delete settings.syncGames[id];
     await writeAppSettings(settings);
+    await publishDevice(settings).catch(() => {});
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
@@ -491,6 +599,11 @@ async function runWrapMode() {
     }
   }
 
+  // Steam (e.g. "Exit game" in the Deck overlay) sends SIGTERM to the whole process group.
+  // Ignore it so we outlive the game long enough to upload; if Steam follows up with SIGKILL,
+  // the next launch uploads the leftover changes before starting (see syncBeforeLaunch).
+  process.on("SIGTERM", () => {});
+
   const exitCode = await new Promise((resolve) => {
     // ponytail: waits for the launched process only; games whose launcher exits early get backed up too soon.
     const child = spawn(command[0], command.slice(1), {
@@ -513,6 +626,7 @@ async function runWrapMode() {
       await saveSync.syncAfterExit(getSyncConfig(fresh), freshState, localDir);
       fresh.syncGames[shortcutId] = freshState;
       await writeAppSettings(fresh);
+      await publishDevice(fresh).catch(() => {});
     } catch (error) {
       await cfg.ask(`Couldn't upload saves after playing:\n${error.message}\n\nThey will upload after your next session.`, ["OK"]);
     }
@@ -592,25 +706,37 @@ async function readAppSettings() {
     hasSeenApiKeyPrompt: false,
     steamInstallPath: "",
     rcloneRemote: "",
-    syncGames: {}
+    syncGames: {},
+    deviceId: "",
+    deviceName: ""
   };
 
+  let settings;
   try {
     const raw = await fs.promises.readFile(getSettingsPath(), "utf8");
     const parsed = JSON.parse(raw);
-    return {
+    settings = {
       steamGridDbApiKey: String(parsed?.steamGridDbApiKey || "").trim(),
       hasSeenApiKeyPrompt: Boolean(parsed?.hasSeenApiKeyPrompt),
       steamInstallPath: String(parsed?.steamInstallPath || "").trim(),
       rcloneRemote: String(parsed?.rcloneRemote || "").trim(),
-      syncGames: parsed?.syncGames && typeof parsed.syncGames === "object" ? parsed.syncGames : {}
+      syncGames: parsed?.syncGames && typeof parsed.syncGames === "object" ? parsed.syncGames : {},
+      deviceId: String(parsed?.deviceId || "").trim(),
+      deviceName: String(parsed?.deviceName || "").trim()
     };
   } catch (error) {
-    if (error && error.code === "ENOENT") {
-      return defaults;
+    if (!error || error.code !== "ENOENT") {
+      throw error;
     }
-    throw error;
+    settings = defaults;
   }
+
+  // Stable identity for the linked-devices list; created once per install.
+  if (!settings.deviceId) {
+    settings.deviceId = crypto.randomUUID();
+    await writeAppSettings(settings);
+  }
+  return settings;
 }
 
 async function writeAppSettings(settings) {
@@ -619,7 +745,9 @@ async function writeAppSettings(settings) {
     hasSeenApiKeyPrompt: Boolean(settings?.hasSeenApiKeyPrompt),
     steamInstallPath: String(settings?.steamInstallPath || "").trim(),
     rcloneRemote: String(settings?.rcloneRemote || "").trim(),
-    syncGames: settings?.syncGames && typeof settings.syncGames === "object" ? settings.syncGames : {}
+    syncGames: settings?.syncGames && typeof settings.syncGames === "object" ? settings.syncGames : {},
+    deviceId: String(settings?.deviceId || "").trim(),
+    deviceName: String(settings?.deviceName || "").trim()
   };
 
   await fs.promises.mkdir(path.dirname(getSettingsPath()), { recursive: true });

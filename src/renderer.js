@@ -1279,25 +1279,134 @@ async function showCloudDialog() {
     <p class="rename-path-label">Connected remote (advanced)</p>
     <input type="text" data-role="remote" placeholder="not connected" />
     <p data-role="status"></p>
+
+    <p class="rename-path-label">This device</p>
+    <div class="inline-row">
+      <input type="text" data-role="device-name" maxlength="60" />
+      <button type="button" data-role="rename-device">Rename</button>
+    </div>
+    <p class="rename-path-label">Linked devices</p>
+    <div class="cloud-list" data-role="devices"><p>Loading...</p></div>
+    <p class="rename-path-label">Synced games</p>
+    <div class="cloud-list" data-role="games"></div>
+    <p class="rename-path-label">Steam Deck Game Mode</p>
+    <p>Saves already sync in Game Mode (they run through each game's Steam shortcut). Add this app to Steam to open it from Game Mode too.</p>
+    <div class="inline-row"><button type="button" data-role="add-self">Add This App to Steam</button></div>
+
     <div class="rename-dialog-actions">
       <button type="button" data-role="test">Test</button>
       <button type="button" data-role="save">Save</button>
     </div>
-  `);
+  `, "cloud-dialog-panel");
   const { panel } = modal;
   const remote = panel.querySelector('[data-role="remote"]');
   const status = panel.querySelector('[data-role="status"]');
   remote.value = current.rcloneRemote || "";
   const values = () => ({ rcloneRemote: remote.value.trim() });
+  const deviceName = panel.querySelector('[data-role="device-name"]');
+  const devicesBox = panel.querySelector('[data-role="devices"]');
+  const gamesBox = panel.querySelector('[data-role="games"]');
+
+  const row = (main, sub, action) => {
+    const el = document.createElement("div");
+    el.className = "cloud-row";
+    const text = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = main;
+    const detail = document.createElement("span");
+    detail.textContent = sub;
+    text.append(title, detail);
+    el.appendChild(text);
+    if (action) el.appendChild(action);
+    return el;
+  };
+  const when = (iso) => (iso ? new Date(iso).toLocaleString() : "never");
+  const osName = (p) => (p === "win32" ? "Windows" : p === "linux" ? "Linux / Steam Deck" : p || "?");
+
+  const loadOverview = async () => {
+    devicesBox.innerHTML = "<p>Loading...</p>";
+    gamesBox.innerHTML = "";
+    const data = await window.steamDrop.getCloudOverview();
+    devicesBox.innerHTML = "";
+    if (!data.ok) {
+      devicesBox.textContent = `Error: ${data.error}`;
+      return;
+    }
+    deviceName.value = data.deviceName || "";
+    if (!data.connected) {
+      devicesBox.textContent = "Connect a cloud account to link devices.";
+      return;
+    }
+
+    const devices = [...data.devices].sort((a, b) => (a.id === data.thisDeviceId ? -1 : b.id === data.thisDeviceId ? 1 : 0));
+    const namesById = new Map(devices.map((d) => [d.id, d.name]));
+    for (const device of devices) {
+      const isThis = device.id === data.thisDeviceId;
+      let forget = null;
+      if (!isThis) {
+        forget = document.createElement("button");
+        forget.type = "button";
+        forget.textContent = "Forget";
+        forget.title = "Remove from this list (its saves stay in the cloud)";
+        forget.addEventListener("click", async () => {
+          const response = await window.steamDrop.forgetDevice(device.id);
+          if (!response.ok) log(`ERROR: ${response.error}`);
+          await loadOverview();
+        });
+      }
+      const count = (device.games || []).length;
+      devicesBox.appendChild(
+        row(
+          `${device.name}${isThis ? " (this device)" : ""}`,
+          `${osName(device.platform)} - ${count} synced game${count === 1 ? "" : "s"} - last seen ${when(device.lastSeen)}`,
+          forget
+        )
+      );
+    }
+
+    const games = [...data.games].sort((a, b) => String(a.name || a.key).localeCompare(String(b.name || b.key)));
+    if (games.length === 0) {
+      gamesBox.textContent = "No saves uploaded yet.";
+    }
+    for (const game of games) {
+      const sharedBy = devices.filter((d) => (d.games || []).some((g) => g.key === game.key)).map((d) => d.name);
+      const lastBy = namesById.get(game.deviceId) || game.device || "unknown device";
+      gamesBox.appendChild(
+        row(
+          game.name || game.key,
+          `On: ${sharedBy.join(", ") || "no linked device"} - last upload from ${lastBy}, ${when(game.updatedAt)}`
+        )
+      );
+    }
+  };
+
+  panel.querySelector('[data-role="rename-device"]').addEventListener("click", async () => {
+    const response = await window.steamDrop.renameDevice(deviceName.value);
+    if (!response.ok) status.textContent = `Error: ${response.error}`;
+    await loadOverview();
+  });
+  panel.querySelector('[data-role="add-self"]').addEventListener("click", async () => {
+    const response = await window.steamDrop.addSelfToSteam();
+    if (!response.ok) {
+      status.textContent = `Error: ${response.error}`;
+      return;
+    }
+    status.textContent = "Added. Restart Steam to see Non-Steam Uploader in your library.";
+    setRestartRequired(true);
+  });
 
   panel.querySelectorAll("[data-provider]").forEach((button) =>
     button.addEventListener("click", async () => {
       status.textContent = "Waiting for you to log in in the browser...";
       const response = await window.steamDrop.connectCloud({ type: button.dataset.provider });
       status.textContent = response.ok ? "Connected." : `Error: ${response.error}`;
-      if (response.ok) remote.value = response.rcloneRemote;
+      if (response.ok) {
+        remote.value = response.rcloneRemote;
+        await loadOverview();
+      }
     })
   );
+  loadOverview();
   panel.querySelector('[data-role="test"]').addEventListener("click", async () => {
     status.textContent = "Testing...";
     const response = await window.steamDrop.testCloud(values());
