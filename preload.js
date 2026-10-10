@@ -20,7 +20,6 @@ contextBridge.exposeInMainWorld("steamDrop", {
   pickArtFile: () => ipcRenderer.invoke("app:pickArtFile"),
   getCloudSettings: () => ipcRenderer.invoke("app:getCloudSettings"),
   saveCloudSettings: (payload) => ipcRenderer.invoke("app:saveCloudSettings", payload),
-  pickRclone: () => ipcRenderer.invoke("app:pickRclone"),
   connectCloud: (payload) => ipcRenderer.invoke("app:connectCloud", payload),
   testCloud: (payload) => ipcRenderer.invoke("app:testCloud", payload),
   enableSync: (shortcutId) => ipcRenderer.invoke("app:enableSync", { shortcutId }),

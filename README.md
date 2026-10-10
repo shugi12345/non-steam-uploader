@@ -27,7 +27,6 @@ Add non-Steam games to your Steam library with artwork, fast management tools, a
 ## Requirements 🧩
 
 - Windows or Linux (Steam Deck) with Steam installed.
-- [rclone](https://rclone.org/downloads/) on each device, for save sync.
 - Node.js 20+.
 
 ## Install & Run 🚀
@@ -55,7 +54,7 @@ https://www.steamgriddb.com/profile/preferences/api
 
 ## Save Sync ☁️
 
-1. Click **Cloud Saves** and connect Google Drive / OneDrive / Dropbox (or type an existing rclone remote such as `gdrive:`). Do this on every device.
+1. Click **Cloud Saves** and connect Google Drive / OneDrive / Dropbox. Do this on every device. Nothing needs to be installed: [rclone](https://rclone.org) ships inside the app (fetched by `npm install` / the build scripts into `vendor/`) and keeps its own config in the app data folder.
 2. Right-click a game → **Save Sync...**. On the first device, pick the game's save folder (usually under `%APPDATA%`, `%LOCALAPPDATA%`, `LocalLow` or `Documents`, or inside the game folder).
 3. On your other devices, add the same game **with the same name** and turn on Save Sync. The save folder is picked up from the cloud automatically.
 4. Restart Steam. Launching the game from Steam now downloads the newest save first and uploads yours when you quit.

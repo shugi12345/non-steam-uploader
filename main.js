@@ -305,26 +305,30 @@ ipcMain.handle("app:pickArtFile", async () => {
   return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
 });
 
+// rclone ships inside the app (scripts/fetch-rclone.js) and keeps its own config in userData,
+// so nothing needs to be installed and the user's own rclone setup (if any) is never touched.
+function getRclone() {
+  const bin = process.platform === "win32" ? "rclone.exe" : "rclone";
+  const dir = app.isPackaged
+    ? path.join(process.resourcesPath, "rclone")
+    : path.join(__dirname, "vendor", "rclone", process.platform === "win32" ? "win32" : "linux");
+  return { rclonePath: path.join(dir, bin), rcloneConfig: path.join(app.getPath("userData"), "rclone.conf") };
+}
+
 ipcMain.handle("app:getCloudSettings", async () => {
   const settings = await readAppSettings();
-  return { ok: true, rclonePath: settings.rclonePath, rcloneRemote: settings.rcloneRemote };
+  return { ok: true, rcloneRemote: settings.rcloneRemote };
 });
 
 ipcMain.handle("app:saveCloudSettings", async (_, payload) => {
   try {
     const settings = await readAppSettings();
-    settings.rclonePath = String(payload?.rclonePath || "").trim();
     settings.rcloneRemote = String(payload?.rcloneRemote || "").trim();
     await writeAppSettings(settings);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
-});
-
-ipcMain.handle("app:pickRclone", async () => {
-  const result = await dialog.showOpenDialog({ title: "Select rclone executable", properties: ["openFile"] });
-  return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
 });
 
 // Creates an rclone remote named "nsu"; rclone opens the browser for the OAuth login.
@@ -334,8 +338,10 @@ ipcMain.handle("app:connectCloud", async (_, payload) => {
     if (!["drive", "onedrive", "dropbox"].includes(type)) {
       throw new Error("Unsupported cloud provider.");
     }
-    const rclonePath = String(payload?.rclonePath || "").trim();
-    await saveSync.rcloneOk(rclonePath, ["config", "create", "nsu", type]);
+    await saveSync.rcloneOk(getRclone(), ["config", "create", "nsu", type]);
+    const settings = await readAppSettings();
+    settings.rcloneRemote = "nsu:";
+    await writeAppSettings(settings);
     return { ok: true, rcloneRemote: "nsu:" };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
@@ -344,7 +350,7 @@ ipcMain.handle("app:connectCloud", async (_, payload) => {
 
 ipcMain.handle("app:testCloud", async (_, payload) => {
   try {
-    await saveSync.rcloneOk(String(payload?.rclonePath || "").trim(), ["lsd", saveSync.remoteJoin(payload?.rcloneRemote)]);
+    await saveSync.rcloneOk(getRclone(), ["lsd", saveSync.remoteJoin(payload?.rcloneRemote)]);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
@@ -360,7 +366,7 @@ function getWrapper() {
 
 function getSyncConfig(settings) {
   return {
-    rclonePath: settings.rclonePath,
+    ...getRclone(),
     remote: settings.rcloneRemote,
     backupsRoot: path.join(app.getPath("userData"), "save-backups"),
     ask: async (message, buttons) =>
@@ -585,7 +591,6 @@ async function readAppSettings() {
     steamGridDbApiKey: "",
     hasSeenApiKeyPrompt: false,
     steamInstallPath: "",
-    rclonePath: "",
     rcloneRemote: "",
     syncGames: {}
   };
@@ -597,7 +602,6 @@ async function readAppSettings() {
       steamGridDbApiKey: String(parsed?.steamGridDbApiKey || "").trim(),
       hasSeenApiKeyPrompt: Boolean(parsed?.hasSeenApiKeyPrompt),
       steamInstallPath: String(parsed?.steamInstallPath || "").trim(),
-      rclonePath: String(parsed?.rclonePath || "").trim(),
       rcloneRemote: String(parsed?.rcloneRemote || "").trim(),
       syncGames: parsed?.syncGames && typeof parsed.syncGames === "object" ? parsed.syncGames : {}
     };
@@ -614,7 +618,6 @@ async function writeAppSettings(settings) {
     steamGridDbApiKey: String(settings?.steamGridDbApiKey || "").trim(),
     hasSeenApiKeyPrompt: Boolean(settings?.hasSeenApiKeyPrompt),
     steamInstallPath: String(settings?.steamInstallPath || "").trim(),
-    rclonePath: String(settings?.rclonePath || "").trim(),
     rcloneRemote: String(settings?.rcloneRemote || "").trim(),
     syncGames: settings?.syncGames && typeof settings.syncGames === "object" ? settings.syncGames : {}
   };

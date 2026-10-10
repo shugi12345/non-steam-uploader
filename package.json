@@ -5,9 +5,10 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win nsis",
-    "build:win-portable": "electron-builder --win portable",
-    "build:linux": "electron-builder --linux AppImage"
+    "build:win": "node scripts/fetch-rclone.js && electron-builder --win nsis",
+    "build:win-portable": "node scripts/fetch-rclone.js && electron-builder --win portable",
+    "build:linux": "node scripts/fetch-rclone.js && electron-builder --linux AppImage",
+    "postinstall": "node scripts/fetch-rclone.js"
   },
   "keywords": [
     "steam",
@@ -41,6 +42,12 @@
       "target": [
         "nsis",
         "portable"
+      ],
+      "extraResources": [
+        {
+          "from": "vendor/rclone/win32",
+          "to": "rclone"
+        }
       ]
     },
     "nsis": {
@@ -53,7 +60,13 @@
       "target": [
         "AppImage"
       ],
-      "category": "Game"
+      "category": "Game",
+      "extraResources": [
+        {
+          "from": "vendor/rclone/linux",
+          "to": "rclone"
+        }
+      ]
     }
   }
 }

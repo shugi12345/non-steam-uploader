@@ -1269,20 +1269,15 @@ async function showCloudDialog() {
   const current = await window.steamDrop.getCloudSettings();
   const modal = openModal(`
     <h3>Cloud Saves</h3>
-    <p>Saves sync through rclone (rclone.org). Install it on each device and connect the same cloud account on each one.</p>
-    <p class="rename-path-label">rclone executable (leave empty if it is on PATH)</p>
-    <div class="inline-row">
-      <input type="text" data-role="rclone" placeholder="rclone" />
-      <button type="button" data-role="browse">Browse...</button>
-    </div>
-    <p class="rename-path-label">Remote</p>
-    <input type="text" data-role="remote" placeholder="nsu:" />
-    <p class="rename-path-label">Or connect a new account (opens your browser)</p>
+    <p>Connect the same cloud account on every device you play on. Nothing else needs to be installed.</p>
+    <p class="rename-path-label">Connect an account (opens your browser to log in)</p>
     <div class="inline-row">
       <button type="button" data-provider="drive">Google Drive</button>
       <button type="button" data-provider="onedrive">OneDrive</button>
       <button type="button" data-provider="dropbox">Dropbox</button>
     </div>
+    <p class="rename-path-label">Connected remote (advanced)</p>
+    <input type="text" data-role="remote" placeholder="not connected" />
     <p data-role="status"></p>
     <div class="rename-dialog-actions">
       <button type="button" data-role="test">Test</button>
@@ -1290,21 +1285,15 @@ async function showCloudDialog() {
     </div>
   `);
   const { panel } = modal;
-  const rclone = panel.querySelector('[data-role="rclone"]');
   const remote = panel.querySelector('[data-role="remote"]');
   const status = panel.querySelector('[data-role="status"]');
-  rclone.value = current.rclonePath || "";
   remote.value = current.rcloneRemote || "";
-  const values = () => ({ rclonePath: rclone.value.trim(), rcloneRemote: remote.value.trim() });
+  const values = () => ({ rcloneRemote: remote.value.trim() });
 
-  panel.querySelector('[data-role="browse"]').addEventListener("click", async () => {
-    const picked = await window.steamDrop.pickRclone();
-    if (picked) rclone.value = picked;
-  });
   panel.querySelectorAll("[data-provider]").forEach((button) =>
     button.addEventListener("click", async () => {
       status.textContent = "Waiting for you to log in in the browser...";
-      const response = await window.steamDrop.connectCloud({ type: button.dataset.provider, rclonePath: values().rclonePath });
+      const response = await window.steamDrop.connectCloud({ type: button.dataset.provider });
       status.textContent = response.ok ? "Connected." : `Error: ${response.error}`;
       if (response.ok) remote.value = response.rcloneRemote;
     })
